@@ -1,0 +1,22 @@
+{
+  "name": "Medidor de Indicadores · Ideación",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "forwardPorts": [
+    5173
+  ],
+  "portsAttributes": {
+    "5173": {
+      "label": "Medidor · desarrollo",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "bash scripts/setup-dev.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}

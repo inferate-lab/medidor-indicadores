@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.output/
+dist/
+.tanstack/
+.wrangler/
+*.log
+*.xlsx
+
+
+coverage/
+playwright-report/
+test-results/
+*.bundle
