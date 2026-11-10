@@ -11,6 +11,7 @@ import { buildAlignment } from "@/lib/ods-rules";
 import {
   SECTOR_LABELS,
   defaultSettings,
+  emptyLinkAssumptions,
   emptyTarget,
   type CausalLevel,
   type DetectedSector,
@@ -248,6 +249,8 @@ function causalModel(project: ProjectInput, all: string[], detected: DetectedSec
     outputs: outputEvidence.map((item) => compact(item)),
     outcomes: outcomeEvidence.map((item) => compact(item)),
     impact,
+    resources: evidenceFor(substantive, ["equipo", "presupuesto", "aliado", "alianza", "recursos", "financiación", "financiacion", "donante"], 4).map((item) => compact(item)),
+    linkAssumptions: emptyLinkAssumptions(),
     assumptions: [
       "La población objetivo puede acceder y permanecer en la intervención.",
       "Los aliados mantienen las capacidades y compromisos necesarios.",

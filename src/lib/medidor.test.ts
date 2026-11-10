@@ -17,6 +17,7 @@ import {
   parseNumericInput,
 } from "@/lib/target-rules";
 import { reviewLogicalFramework } from "@/lib/framework-rules";
+import { assessSmart, outcomesThatLookLikeOutputs } from "@/lib/smart-rules";
 import { defaultRules, defaultSettings, emptyTarget } from "@/types/medidor";
 
 describe("integridad de datos", () => {
@@ -161,7 +162,7 @@ describe("metas y exportación", () => {
     const analysis = await buildDemoAnalysis();
     analysis.indicators[0]!.decision = "aprobado";
     const workbook = buildWorkbook(DEMO_PROJECT, analysis);
-    expect(workbook.SheetNames).toEqual(["Resumen", "Indicadores", "Marco lógico sugerido", "Alineación ODS", "Referencias BID y Colombia", "Marcos de la fundación", "Reglas aplicadas", "Pendientes"]);
+    expect(workbook.SheetNames).toEqual(["Resumen", "Indicadores", "Marco lógico sugerido", "Alineación ODS", "Referencias BID y Colombia", "Marcos de la fundación", "Matriz SMART", "Reglas aplicadas", "Pendientes"]);
   });
 
   it("exporta E2050 y mantiene las metas numéricas vacías sin evidencia", async () => {
@@ -285,6 +286,50 @@ describe("marcos de la fundación y reglas ajustables", () => {
     const frameworks = XLSX.utils.sheet_to_json(workbook.Sheets["Marcos de la fundación"]!, { header: 1 }) as unknown[][];
     expect(frameworks.flat()).toContain("PA-012");
     const rules = XLSX.utils.sheet_to_json(workbook.Sheets["Reglas aplicadas"]!, { header: 1 }) as unknown[][];
-    expect(rules).toHaveLength(9);
+    expect(rules).toHaveLength(12);
+  });
+});
+
+describe("teoría de cambio: supuestos por enlace y SMART", () => {
+  it("no inventa supuestos: los enlaces vacíos quedan pendientes hasta que el equipo los escribe", async () => {
+    const analysis = await buildDemoAnalysis();
+    const rules = defaultRules();
+    const status = () =>
+      reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, rules).checks.find(
+        (check) => check.id === "supuestosEnlace",
+      )?.status;
+    expect(status()).toBe("revisar");
+    analysis.causal.linkAssumptions = {
+      actividad_producto: "Si se forman docentes, entonces usarán los kits porque cuentan con guía y tiempo de aula.",
+      producto_resultado: "Si los kits están disponibles, entonces los estudiantes practican porque los clubes funcionan cada semana.",
+      resultado_impacto: "Si mejoran sus competencias, entonces continuarán trayectorias STEM porque hay oferta local.",
+    };
+    expect(status()).toBe("cumple");
+  });
+
+  it("señala resultados que describen entregas y respeta los que expresan cambio", () => {
+    expect(
+      outcomesThatLookLikeOutputs([
+        "120 kits entregados a las instituciones",
+        "Los docentes aplican la metodología en sus talleres de aula",
+      ]),
+    ).toEqual(["120 kits entregados a las instituciones"]);
+  });
+
+  it("evalúa SMART por criterio, sin puntaje, y solo exige a los indicadores definitivos", async () => {
+    const analysis = await buildDemoAnalysis();
+    const indicator = analysis.indicators.find((item) => item.projectEvidence.length > 0)!;
+    expect(assessSmart(indicator).failed).toEqual([]);
+    const broken = { ...indicator, formula: "", responsible: "" };
+    expect(assessSmart(broken).failed).toEqual(["M", "A"]);
+
+    const rules = defaultRules();
+    indicator.formula = "";
+    const proposed = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, rules);
+    expect(proposed.checks.find((check) => check.id === "smart")?.status).toBe("cumple");
+    indicator.decision = "aprobado";
+    const accepted = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, rules);
+    expect(accepted.checks.find((check) => check.id === "smart")?.status).toBe("revisar");
+    expect(accepted.issues.find((issue) => issue.area === "SMART")?.severity).toBe("critico");
   });
 });

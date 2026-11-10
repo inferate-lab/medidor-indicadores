@@ -128,6 +128,10 @@ export interface CausalModel {
   outcomes: string[];
   impact: string;
   assumptions: string[];
+  /** Equipo, dinero, alianzas y conocimiento con los que cuenta el proyecto. */
+  resources: string[];
+  /** Condición bajo la cual cada paso de la cadena produce el siguiente. Vacío = por confirmar. */
+  linkAssumptions: Record<CausalLinkKey, string>;
   risks: string[];
   externalFactors: string[];
   preliminaryTheoryOfChange: string;
@@ -302,7 +306,10 @@ export type RuleId =
   | "lineaBase"
   | "ods"
   | "atribucion"
-  | "sentidoExito";
+  | "sentidoExito"
+  | "supuestosEnlace"
+  | "productoResultado"
+  | "smart";
 
 export interface RuleDefinition {
   id: RuleId;
@@ -320,6 +327,9 @@ export const RULE_DEFINITIONS: RuleDefinition[] = [
   { id: "ods", label: "Trazabilidad ODS", description: "Al menos un indicador se vincula a una meta ODS y toda relación tiene justificación causal." },
   { id: "atribucion", label: "Control de atribución", description: "Los indicadores de impacto declaran factores externos y límites de atribución." },
   { id: "sentidoExito", label: "Sentido de éxito", description: "Todo indicador cuyo éxito no sea aumentar explica por escrito por qué, y su meta es coherente con ese sentido." },
+  { id: "supuestosEnlace", label: "Supuestos por enlace", description: "Cada paso de la cadena (actividades a productos, productos a resultados, resultados a impacto) explica bajo qué condición se espera el cambio." },
+  { id: "productoResultado", label: "Productos y resultados separados", description: "Ningún resultado describe en realidad una entrega, cobertura o asistencia." },
+  { id: "smart", label: "Indicadores SMART", description: "Cada indicador seleccionado es específico, medible, alcanzable, relevante y tiene momento de medición." },
 ];
 
 export interface RuleSetting {
@@ -439,4 +449,28 @@ export function emptyTarget(): IndicatorTarget {
     validationStatus: "pendiente",
     explicitZero: false,
   };
+}
+
+export type CausalLinkKey = "actividad_producto" | "producto_resultado" | "resultado_impacto";
+export const CAUSAL_LINK_LABELS: Record<CausalLinkKey, string> = {
+  actividad_producto: "De actividades a productos",
+  producto_resultado: "De productos a resultados",
+  resultado_impacto: "De resultados a impacto",
+};
+export function emptyLinkAssumptions(): Record<CausalLinkKey, string> {
+  return { actividad_producto: "", producto_resultado: "", resultado_impacto: "" };
+}
+
+export type SmartCriterion = "S" | "M" | "A" | "R" | "T";
+export const SMART_LABELS: Record<SmartCriterion, string> = {
+  S: "Específico",
+  M: "Medible",
+  A: "Alcanzable",
+  R: "Relevante",
+  T: "Con tiempo definido",
+};
+export interface SmartAssessment {
+  criteria: Record<SmartCriterion, { ok: boolean; reason: string }>;
+  /** Criterios que no se cumplen. No hay puntaje: un solo fallo pide corregir. */
+  failed: SmartCriterion[];
 }

@@ -12,10 +12,12 @@ import * as XLSX from "xlsx";
 import { findTarget, ODS_SOURCE } from "@/data/ods-catalog";
 import { BID_CATALOG_SOURCE } from "@/data/bid-catalog";
 import { sanitizeCell } from "@/lib/sanitize";
+import { assessSmart } from "@/lib/smart-rules";
 import { canAcceptValue, evaluateTarget } from "@/lib/target-rules";
 import { frameworkNames, reviewLogicalFramework } from "@/lib/framework-rules";
 import { detectOdsWashing } from "@/lib/ods-rules";
 import {
+  CAUSAL_LINK_LABELS,
   DECISION_LABELS,
   DETERMINATION_LABELS,
   DIMENSION_LABELS,
@@ -26,8 +28,11 @@ import {
   RULE_DEFINITIONS,
   REVIEW_LABELS,
   defaultSettings,
+  SMART_LABELS,
   SPHERE_LABELS,
   type CausalLevel,
+  type CausalLinkKey,
+  type SmartCriterion,
   type Indicator,
   type PlatformSettings,
   type ProjectInput,
@@ -116,7 +121,11 @@ export function buildWorkbook(
     ["Problema", analysis.causal.problem || null],
     ["Causas", list(analysis.causal.causes) || null],
     ["Brechas", list(analysis.causal.gaps) || null],
-    ["Supuestos", list(analysis.causal.assumptions) || null],
+    ["Recursos", list(analysis.causal.resources) || null],
+    ...(Object.keys(CAUSAL_LINK_LABELS) as CausalLinkKey[]).map(
+      (key): Row => [`Supuesto: ${CAUSAL_LINK_LABELS[key].toLowerCase()}`, analysis.causal.linkAssumptions[key].trim() || "PENDIENTE"],
+    ),
+    ["Supuestos generales", list(analysis.causal.assumptions) || null],
     ["Riesgos", list(analysis.causal.risks) || null],
     ["Factores externos", list(analysis.causal.externalFactors) || null],
     ["Teoría del Cambio preliminar", analysis.causal.preliminaryTheoryOfChange || null],
@@ -482,6 +491,22 @@ export function buildWorkbook(
     wb,
     sheetFromRows([frameworkHeader, ...frameworkRows], [32, 46, 22, 60, 20, 34, 22]),
     "Marcos de la fundación",
+  );
+
+  const smartKeys = Object.keys(SMART_LABELS) as SmartCriterion[];
+  const smartHeader: Row = ["Indicador", ...smartKeys.map((key) => SMART_LABELS[key]), "Qué corregir"];
+  const smartRows: Row[] = included.map((indicator) => {
+    const smart = assessSmart(indicator);
+    return [
+      indicator.name,
+      ...smartKeys.map((key) => (smart.criteria[key].ok ? "Cumple" : "Revisar")),
+      smart.failed.map((key) => `${SMART_LABELS[key]}: ${smart.criteria[key].reason}`).join(" ") || null,
+    ];
+  });
+  XLSX.utils.book_append_sheet(
+    wb,
+    sheetFromRows([smartHeader, ...smartRows], [60, 14, 14, 14, 14, 20, 80]),
+    "Matriz SMART",
   );
 
   const rulesHeader: Row = ["Regla", "Qué exige", "Aplicación en este proyecto", "Parámetros", "Resultado", "Justificación si no se aplica"];

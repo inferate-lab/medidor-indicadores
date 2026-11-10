@@ -23,20 +23,25 @@ import { analyzeProject } from "@/lib/analyze-project";
 import { extractTextFromFile } from "@/lib/doc-extract";
 import { frameworkNames, reviewLogicalFramework } from "@/lib/framework-rules";
 import { validateAlignments } from "@/lib/ods-rules";
+import { assessSmart } from "@/lib/smart-rules";
 import { detectEmbeddedInstructions } from "@/lib/sanitize";
 import { SessionProvider, useSession } from "@/lib/session";
 import {
+  CAUSAL_LINK_LABELS,
   DIMENSION_LABELS,
   HORIZON_LABELS,
   LEVEL_LABELS,
   ORIENTATION_LABELS,
   RULE_DEFINITIONS,
+  SMART_LABELS,
   SPHERE_LABELS,
   type CausalLevel,
+  type CausalLinkKey,
   type Indicator,
   type InstitutionalFramework,
   type Orientation,
   type RuleId,
+  type SmartCriterion,
 } from "@/types/medidor";
 
 export const Route = createFileRoute("/")({ component: Index });
@@ -427,6 +432,32 @@ function UnderstandingStep() {
           })}
         </div>
       </Panel>
+      <Panel
+        title="Supuestos entre niveles y recursos"
+        description="Una cadena causal se sostiene en sus supuestos. Escribe bajo qué condición cada paso produce el siguiente; lo que quede vacío aparecerá como pendiente en la validación."
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          {(Object.entries(CAUSAL_LINK_LABELS) as [CausalLinkKey, string][]).map(([key, label]) => (
+            <Field key={key} label={label}>
+              <textarea
+                className={`${textareaClass} min-h-28`}
+                value={causal.linkAssumptions[key]}
+                placeholder="Si…, entonces… porque…"
+                onChange={(event) => updateCausal((current) => ({ ...current, linkAssumptions: { ...current.linkAssumptions, [key]: event.target.value } }))}
+              />
+            </Field>
+          ))}
+        </div>
+        <div className="mt-4">
+          <Field label="Recursos con los que cuenta el proyecto" help="Equipo, presupuesto, alianzas y conocimiento. Un elemento por línea.">
+            <textarea
+              className={`${textareaClass} min-h-20`}
+              value={causal.resources.join("\n")}
+              onChange={(event) => updateCausal((current) => ({ ...current, resources: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) }))}
+            />
+          </Field>
+        </div>
+      </Panel>
       {analysis.questions.length > 0 && (
         <Panel title="Vacíos que afectan la medición" description="No bloquean las recomendaciones, pero deben resolverse antes de aprobar metas.">
           <div className="grid gap-3 md:grid-cols-2">
@@ -539,6 +570,7 @@ function friendlyBurden(burden: Indicator["measurementBurden"]): string {
 function IndicatorCard({ indicator, onChange }: { indicator: Indicator; onChange: (indicator: Indicator) => void }) {
   const { settings } = useSession();
   const activeFrameworks = settings.frameworks.filter((framework) => framework.active);
+  const smart = assessSmart(indicator);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Indicator>(indicator);
@@ -560,6 +592,7 @@ function IndicatorCard({ indicator, onChange }: { indicator: Indicator; onChange
             {indicator.decision === "modificado" && <Badge>Modificado</Badge>}
             {indicator.isGuardrail && <Badge>Salvaguarda</Badge>}
             {indicator.orientation !== "ascendente" && <Badge>{ORIENTATION_LABELS[indicator.orientation]}</Badge>}
+            {smart.failed.length > 0 && <Badge>SMART: revisar {smart.failed.join(", ")}</Badge>}
           </div>
           <h3 className="mt-2 text-base font-semibold">{indicator.name}</h3>
           <p className="mt-2 text-sm"><strong>Qué mide:</strong> {indicator.observedChange}</p>
@@ -679,6 +712,16 @@ function IndicatorCard({ indicator, onChange }: { indicator: Indicator; onChange
           <Info label="Responsable sugerido" value={indicator.responsible} />
           <Info label="Tiempo de registro" value={friendlyBurden(indicator.measurementBurden)} />
           <Info label="Desagregaciones" value={indicator.disaggregations.join(", ")} />
+          <div className="lg:col-span-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Revisión SMART</p>
+            <ul className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+              {(Object.entries(smart.criteria) as [SmartCriterion, { ok: boolean; reason: string }][]).map(([key, item]) => (
+                <li key={key} className={`rounded-md border p-2 ${item.ok ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
+                  <strong>{SMART_LABELS[key]}: {item.ok ? "cumple" : "revisar"}.</strong> {item.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
           {indicator.projectEvidence.length > 0 && (
             <div className="lg:col-span-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Evidencia encontrada</p>

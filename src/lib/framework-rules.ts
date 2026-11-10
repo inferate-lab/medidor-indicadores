@@ -6,11 +6,15 @@
  * justificación escrita que queda en la pantalla y en el Excel.
  */
 
+import { assessSmart, outcomesThatLookLikeOutputs } from "@/lib/smart-rules";
 import { directionIssues } from "@/lib/target-rules";
 import {
+  CAUSAL_LINK_LABELS,
   LEVEL_LABELS,
   RULE_DEFINITIONS,
+  SMART_LABELS,
   type CausalLevel,
+  type CausalLinkKey,
   type CausalModel,
   type CheckStatus,
   type Indicator,
@@ -69,6 +73,9 @@ export function reviewLogicalFramework(
     ods: [],
     atribucion: [],
     sentidoExito: [],
+    supuestosEnlace: [],
+    productoResultado: [],
+    smart: [],
   };
 
   if (!project.targetPopulation.trim()) {
@@ -170,6 +177,41 @@ export function reviewLogicalFramework(
         action: "Corregir la meta o el sentido de éxito del indicador.",
       });
     }
+  }
+
+  const missingLinks = (Object.keys(CAUSAL_LINK_LABELS) as CausalLinkKey[]).filter(
+    (key) => !causal.linkAssumptions[key].trim(),
+  );
+  if (missingLinks.length) {
+    found.supuestosEnlace.push({
+      severity: "importante",
+      area: "Supuestos por enlace",
+      message: `Falta el supuesto en: ${missingLinks.map((key) => CAUSAL_LINK_LABELS[key].toLowerCase()).join("; ")}.`,
+      action: "Escribir, para cada paso, bajo qué condición se espera el cambio: «si…, entonces… porque…».",
+    });
+  }
+
+  const suspicious = outcomesThatLookLikeOutputs(causal.outcomes);
+  if (suspicious.length) {
+    found.productoResultado.push({
+      severity: "mejora",
+      area: "Productos y resultados",
+      message: `${suspicious.length} resultado(s) parecen describir una entrega o cobertura: ${suspicious.map((item) => `«${item.slice(0, 90)}»`).join("; ")}.`,
+      action: "Revisar si son productos. Un resultado expresa un cambio en personas, instituciones o territorio.",
+    });
+  }
+
+  // SMART se exige a los indicadores definitivos; los propuestos aún pueden descartarse.
+  for (const indicator of indicators) {
+    if (indicator.decision !== "aprobado" && indicator.decision !== "modificado") continue;
+    const smart = assessSmart(indicator);
+    if (smart.failed.length === 0) continue;
+    found.smart.push({
+      severity: smart.failed.includes("M") ? "critico" : "importante",
+      area: "SMART",
+      message: `"${indicator.name}": ${smart.failed.map((key) => `${SMART_LABELS[key]} — ${smart.criteria[key].reason}`).join(" ")}`,
+      action: "Completar o reescribir el indicador con la opción Modificar.",
+    });
   }
 
   const issues: LogicalFrameworkIssue[] = [];
