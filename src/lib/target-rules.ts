@@ -67,7 +67,7 @@ export function evaluateTarget(indicator: Indicator): TargetEvaluation {
       "La población de la meta difiere de la población del indicador; verifica que sean comparables.",
     );
   }
-  if (t.value !== null && isBlank(t.targetDate)) {
+  if (hasQuantifiedTarget && isBlank(t.targetDate)) {
     incompatibilities.push("La meta no tiene fecha; sin plazo no es verificable.");
   }
   if (
@@ -127,6 +127,16 @@ export function directionIssues(indicator: Indicator): string[] {
     (t.lowerBound === null || t.upperBound === null)
   ) {
     issues.push("El éxito es permanecer en un rango: la meta necesita límite inferior y superior.");
+  }
+  if (
+    indicator.orientation === "estable" &&
+    comparable &&
+    t.value !== t.baselineValue &&
+    (t.lowerBound === null || t.upperBound === null)
+  ) {
+    issues.push(
+      "El éxito es mantenerse: la meta difiere de la línea base y no define el margen tolerado (límite inferior y superior).",
+    );
   }
   return issues;
 }

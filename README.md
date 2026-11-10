@@ -89,3 +89,9 @@ El Site original no se modifica y esta copia no contiene su configuración de pu
 
 - `src/types/reporting.ts` y `src/lib/reporting-workflow.ts` definen reportes por periodo, permisos por rol con segregación de funciones, transiciones validadas (borrador, enviado, en revisión, devuelto, aprobado, reabierto), versiones y avance según el sentido de éxito.
 - Son funciones puras con pruebas. Conectarlas a pantallas requiere persistencia y autenticación en servidor.
+
+## Plantilla de reporte e importación desde Excel
+
+- El Excel exportado incluye la hoja "Plantilla de reporte", con una fila por indicador seleccionado. `src/lib/excel-import.ts` la lee diligenciada usando el código de la fundación como llave.
+- La importación no corrige en silencio: un vacío no es cero, un cero debe confirmarse, los códigos duplicados o desconocidos se rechazan y cada problema indica su fila.
+- El marco lógico se evalúa con los indicadores seleccionados en cuanto existe alguno, y no exige indicadores ni supuestos de impacto cuando la teoría de cambio no define impacto.

@@ -14,6 +14,7 @@ import { BID_CATALOG_SOURCE } from "@/data/bid-catalog";
 import { sanitizeCell } from "@/lib/sanitize";
 import { assessSmart } from "@/lib/smart-rules";
 import { canAcceptValue, evaluateTarget } from "@/lib/target-rules";
+import { REPORT_TEMPLATE_SHEET, templateRows } from "@/lib/excel-import";
 import { frameworkNames, reviewLogicalFramework } from "@/lib/framework-rules";
 import { detectOdsWashing } from "@/lib/ods-rules";
 import {
@@ -496,7 +497,7 @@ export function buildWorkbook(
   const smartKeys = Object.keys(SMART_LABELS) as SmartCriterion[];
   const smartHeader: Row = ["Indicador", ...smartKeys.map((key) => SMART_LABELS[key]), "Qué corregir"];
   const smartRows: Row[] = included.map((indicator) => {
-    const smart = assessSmart(indicator);
+    const smart = assessSmart(indicator, analysis.causal);
     return [
       indicator.name,
       ...smartKeys.map((key) => (smart.criteria[key].ok ? "Cumple" : "Revisar")),
@@ -532,6 +533,14 @@ export function buildWorkbook(
     wb,
     sheetFromRows([rulesHeader, ...rulesRows], [26, 70, 24, 46, 16, 60]),
     "Reglas aplicadas",
+  );
+
+  // Plantilla que el equipo diligencia cada periodo y vuelve a cargar con importMeasurements.
+  const template = templateRows(included);
+  XLSX.utils.book_append_sheet(
+    wb,
+    sheetFromRows(template, [24, 60, 26, 34, 14, 14, 24, 40, 40, 40]),
+    REPORT_TEMPLATE_SHEET,
   );
 
   const pendHeader: Row = ["Origen", "Asunto", "Detalle", "Estado"];

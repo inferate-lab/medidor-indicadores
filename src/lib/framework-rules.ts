@@ -63,7 +63,13 @@ export function reviewLogicalFramework(
   allIndicators: Indicator[],
   rules: LogicalFrameworkRules,
 ): LogicalFrameworkReview {
-  const indicators = allIndicators.filter((indicator) => indicator.decision !== "excluido");
+  const active = allIndicators.filter((indicator) => indicator.decision !== "excluido");
+  const definitive = active.filter((indicator) => indicator.decision === "aprobado" || indicator.decision === "modificado");
+  // En cuanto el equipo selecciona indicadores, el marco se juzga por ellos y no por las propuestas pendientes.
+  const indicators = definitive.length ? definitive : active;
+  const basis = definitive.length ? "seleccionados" : "propuestos, aún sin seleccionar";
+  // No se exige medir ni justificar una etapa que la teoría de cambio no define.
+  const hasImpact = causal.impact.trim().length > 0;
   const found: Record<RuleId, LogicalFrameworkIssue[]> = {
     poblacion: [],
     territorio: [],
@@ -110,6 +116,7 @@ export function reviewLogicalFramework(
     { gestion: 0, producto: 0, resultado: 0, impacto: 0 },
   );
   for (const level of LEVELS) {
+    if (level === "impacto" && !hasImpact) continue;
     if (counts[level] >= rules.minByLevel[level]) continue;
     found.cobertura.push({
       severity: level === "resultado" ? "critico" : "importante",
@@ -119,6 +126,15 @@ export function reviewLogicalFramework(
         level === "resultado"
           ? "Incorporar resultados que vayan más allá de cobertura y entregables, o ajustar el mínimo con su justificación."
           : "Agregar indicadores de este nivel o ajustar el mínimo si el proyecto no lo requiere.",
+    });
+  }
+
+  if (!hasImpact && counts.impacto > 0) {
+    found.cobertura.push({
+      severity: "importante",
+      area: "Cobertura: Impacto",
+      message: `Hay ${counts.impacto} indicador(es) de impacto, pero la teoría de cambio no define un impacto.`,
+      action: "Describir el impacto al que aporta el proyecto o descartar esos indicadores.",
     });
   }
 
@@ -155,8 +171,16 @@ export function reviewLogicalFramework(
     found.atribucion.push({
       severity: "importante",
       area: "Atribución",
-      message: "Un indicador de impacto no declara factores externos ni límites de atribución.",
+      message: "Un indicador de impacto no declara sus límites de atribución.",
       action: "Añadir análisis de contribución o un diseño evaluativo proporcional.",
+    });
+  }
+  if (counts.impacto > 0 && causal.externalFactors.filter((item) => item.trim()).length === 0) {
+    found.atribucion.push({
+      severity: "importante",
+      area: "Atribución",
+      message: "Hay indicadores de impacto y el proyecto no identifica factores externos que también influyen en ese cambio.",
+      action: "Listar políticas, condiciones del territorio u otras intervenciones que puedan explicar parte del cambio.",
     });
   }
 
@@ -180,7 +204,7 @@ export function reviewLogicalFramework(
   }
 
   const missingLinks = (Object.keys(CAUSAL_LINK_LABELS) as CausalLinkKey[]).filter(
-    (key) => !causal.linkAssumptions[key].trim(),
+    (key) => !causal.linkAssumptions[key].trim() && (key !== "resultado_impacto" || hasImpact),
   );
   if (missingLinks.length) {
     found.supuestosEnlace.push({
@@ -204,7 +228,7 @@ export function reviewLogicalFramework(
   // SMART se exige a los indicadores definitivos; los propuestos aún pueden descartarse.
   for (const indicator of indicators) {
     if (indicator.decision !== "aprobado" && indicator.decision !== "modificado") continue;
-    const smart = assessSmart(indicator);
+    const smart = assessSmart(indicator, causal);
     if (smart.failed.length === 0) continue;
     found.smart.push({
       severity: smart.failed.includes("M") ? "critico" : "importante",
@@ -254,7 +278,7 @@ export function reviewLogicalFramework(
         ? "requiere_ajustes"
         : "coherente",
     strengths: [
-      `La batería combina ${counts.gestion} indicadores de gestión, ${counts.producto} de producto, ${counts.resultado} de resultado y ${counts.impacto} de impacto.`,
+      `La batería (indicadores ${basis}) combina ${counts.gestion} indicadores de gestión, ${counts.producto} de producto, ${counts.resultado} de resultado y ${counts.impacto} de impacto.`,
       "Cada indicador incluye una línea base sugerida, fórmula, fuente, instrumento y referencia internacional.",
       "La alineación ODS está separada de la meta cuantitativa del proyecto.",
     ],

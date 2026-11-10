@@ -37,6 +37,7 @@ import {
   SPHERE_LABELS,
   type CausalLevel,
   type CausalLinkKey,
+  type CausalModel,
   type Indicator,
   type InstitutionalFramework,
   type Orientation,
@@ -532,7 +533,7 @@ function IndicatorsStep() {
       </Panel>
       <div className="space-y-3">
         {visible.map((indicator) => (
-          <IndicatorCard key={indicator.id} indicator={indicator} onChange={(next) => updateIndicator(indicator.id, () => next)} />
+          <IndicatorCard key={indicator.id} indicator={indicator} causal={analysis.causal} onChange={(next) => updateIndicator(indicator.id, () => next)} />
         ))}
       </div>
       <NavButtons back={() => setStep(3)} next={() => setStep(5)} />
@@ -567,10 +568,10 @@ function friendlyBurden(burden: Indicator["measurementBurden"]): string {
   return labels[burden];
 }
 
-function IndicatorCard({ indicator, onChange }: { indicator: Indicator; onChange: (indicator: Indicator) => void }) {
+function IndicatorCard({ indicator, causal, onChange }: { indicator: Indicator; causal: CausalModel; onChange: (indicator: Indicator) => void }) {
   const { settings } = useSession();
   const activeFrameworks = settings.frameworks.filter((framework) => framework.active);
-  const smart = assessSmart(indicator);
+  const smart = assessSmart(indicator, causal);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Indicator>(indicator);

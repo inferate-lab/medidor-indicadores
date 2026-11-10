@@ -112,6 +112,27 @@ export function validateForSubmission({
   );
 
   if (!period.open) errors.push(`El periodo ${period.id} está cerrado.`);
+  if (report.periodId !== period.id) {
+    errors.push(`El reporte es del periodo ${report.periodId} y se está validando contra ${period.id}.`);
+  }
+  // Un Map se quedaría en silencio con la última fila; los duplicados se rechazan antes.
+  const seen = new Set<string>();
+  for (const value of report.values) {
+    const label = value.institutionalCode || value.indicatorId;
+    if (seen.has(value.indicatorId)) {
+      errors.push(`El indicador "${label}" tiene más de un valor en el mismo reporte.`);
+    }
+    seen.add(value.indicatorId);
+    if (value.periodId !== report.periodId) {
+      errors.push(`El valor de "${label}" pertenece al periodo ${value.periodId}, no a ${report.periodId}.`);
+    }
+    if (value.explicitZero && value.value !== 0) {
+      errors.push(`El valor de "${label}" está marcado como cero explícito pero no es cero.`);
+    }
+    if (value.value === 0 && !value.explicitZero) {
+      errors.push(`El valor de "${label}" es cero sin confirmación: confirma que es un cero real y no un dato faltante.`);
+    }
+  }
   if (
     otherReports.some(
       (other) =>
@@ -192,11 +213,12 @@ export interface TransitionInput {
   eventId: string;
   comment?: string;
   indicatorComments?: Record<string, string>;
-  validation?: SubmissionValidation;
+  /** Contexto para validar el envío. Obligatorio en la acción "enviar". */
+  submission?: Omit<SubmissionValidationInput, "report" | "now">;
 }
 
 export type TransitionResult =
-  | { ok: true; report: IndicatorReport; event: ReviewEvent; snapshot: ReportVersionSnapshot | null }
+  | { ok: true; report: IndicatorReport; event: ReviewEvent; snapshot: ReportVersionSnapshot | null; warnings: string[] }
   | { ok: false; errors: string[] };
 
 const ACTION_LABELS: Record<ReviewAction, string> = {
@@ -215,7 +237,7 @@ export function transition({
   eventId,
   comment = "",
   indicatorComments = {},
-  validation,
+  submission,
 }: TransitionInput): TransitionResult {
   const permission: PermissionAction = action === "tomar_revision" ? "revisar" : action;
   const expected: Partial<Record<ReviewAction, IndicatorReport["status"][]>> = {
@@ -236,11 +258,16 @@ export function transition({
   if (actorRole === null) {
     return { ok: false, errors: [`No tiene permiso para ${ACTION_LABELS[action]} este reporte.`] };
   }
-  if (action === "enviar" && validation === undefined) {
-    return { ok: false, errors: ["La validación del reporte es obligatoria antes de enviarlo."] };
-  }
-  if (action === "enviar" && validation !== undefined && validation.errors.length > 0) {
-    return { ok: false, errors: [...validation.errors] };
+  let warnings: string[] = [];
+  if (action === "enviar") {
+    if (submission === undefined) {
+      return { ok: false, errors: ["Faltan los datos para validar el reporte antes de enviarlo."] };
+    }
+    // La validación se ejecuta aquí, sobre el contenido que realmente se envía:
+    // no se acepta un resultado calculado antes o sobre otra versión.
+    const validation = validateForSubmission({ ...submission, report, now });
+    if (validation.errors.length > 0) return { ok: false, errors: validation.errors };
+    warnings = validation.warnings;
   }
   if (
     action === "devolver" &&
@@ -263,19 +290,19 @@ export function transition({
           : action === "aprobar"
             ? "aprobado"
             : "reabierto";
-  const nextVersion = action === "aprobar" ? report.version + 1 : report.version;
+  const isResubmission = action === "enviar" && report.submittedVersion !== null;
+  const nextVersion = isResubmission ? report.version + 1 : report.version;
   const nextReport: IndicatorReport = {
     ...report,
     status: toStatus,
     version: nextVersion,
     submittedBy: action === "enviar" ? actor.id : report.submittedBy,
-    submittedVersion: action === "enviar" ? report.version : report.submittedVersion,
+    submittedVersion: action === "enviar" ? nextVersion : report.submittedVersion,
     updatedAt: now,
     values: report.values.map((value) => ({ ...value })),
   };
-  const shouldSnapshot =
-    action === "aprobar" ||
-    (action === "enviar" && (report.status === "devuelto" || report.status === "reabierto"));
+  // Cada envío es una versión: la instantánea queda identificada de forma única por reporte y versión.
+  const shouldSnapshot = action === "enviar";
   const snapshot: ReportVersionSnapshot | null = shouldSnapshot
     ? {
         reportId: report.id,
@@ -297,7 +324,7 @@ export function transition({
     indicatorComments: { ...indicatorComments },
     at: now,
   };
-  return { ok: true, report: nextReport, event, snapshot };
+  return { ok: true, report: nextReport, event, snapshot, warnings };
 }
 
 export function currentTurn(status: IndicatorReport["status"]): Role | null {

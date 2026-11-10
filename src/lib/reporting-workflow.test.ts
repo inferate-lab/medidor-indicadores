@@ -82,12 +82,12 @@ function report(values: IndicatorValue[], overrides: Partial<IndicatorReport> = 
   };
 }
 
-function validValidation() {
-  return { errors: [], warnings: [] };
+function submissionFor(indicators: Indicator[]) {
+  return { indicators, period: PERIOD, previousApproved: null, otherReports: [] };
 }
 
 describe("flujo de reportes periódicos", () => {
-  it("completa el camino feliz de borrador a aprobado y crea la versión aprobada", () => {
+  it("completa el camino feliz de borrador a aprobado y guarda la versión enviada", () => {
     const tracked = indicator();
     const initial = report([value(tracked, 10)]);
     const sent = transition({
@@ -96,12 +96,13 @@ describe("flujo de reportes periódicos", () => {
       actor: user("responsable-1", ["responsable"]),
       now: NOW,
       eventId: "event-1",
-      validation: validValidation(),
+      submission: submissionFor([tracked]),
     });
     expect(sent.ok).toBe(true);
     if (!sent.ok) return;
     expect(sent.report.status).toBe("enviado");
-    expect(sent.snapshot).toBeNull();
+    expect(sent.snapshot).toMatchObject({ version: 1, savedBy: "responsable-1" });
+    expect(sent.report.submittedVersion).toBe(1);
 
     const reviewing = transition({
       report: sent.report,
@@ -123,8 +124,8 @@ describe("flujo de reportes periódicos", () => {
     expect(approved.ok).toBe(true);
     if (!approved.ok) return;
     expect(approved.report.status).toBe("aprobado");
-    expect(approved.report.version).toBe(2);
-    expect(approved.snapshot).toMatchObject({ version: 2, savedBy: "approver-1" });
+    expect(approved.report.version).toBe(1);
+    expect(approved.snapshot).toBeNull();
     expect(approved.event.actorRole).toBe("aprobador");
     expect(initial.status).toBe("borrador");
   });
@@ -146,16 +147,17 @@ describe("flujo de reportes periódicos", () => {
   it("conserva una instantánea al reenviar después de una devolución", () => {
     const tracked = indicator();
     const result = transition({
-      report: report([value(tracked, 20)], { status: "devuelto", submittedBy: "responsable-1" }),
+      report: report([value(tracked, 20)], { status: "devuelto", submittedBy: "responsable-1", submittedVersion: 1 }),
       action: "enviar",
       actor: user("responsable-1", ["responsable"]),
       now: NOW,
       eventId: "event-1",
-      validation: validValidation(),
+      submission: submissionFor([tracked]),
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.snapshot).toMatchObject({ reportId: "report-1", version: 1 });
+    expect(result.snapshot).toMatchObject({ reportId: "report-1", version: 2 });
+    expect(result.report.submittedVersion).toBe(2);
     expect(result.snapshot?.values).not.toBe(result.report.values);
   });
 
@@ -321,5 +323,70 @@ describe("fecha límite", () => {
     const base = { report, indicators: [], period, previousApproved: null, otherReports: [] };
     expect(validateForSubmission({ ...base, now: "2026-07-15T18:30:00Z" }).warnings).toEqual([]);
     expect(validateForSubmission({ ...base, now: "2026-07-16T08:00:00Z" }).warnings).toHaveLength(1);
+  });
+});
+
+describe("integridad del envío", () => {
+  const send = (candidate: IndicatorReport, indicators: Indicator[]) =>
+    transition({
+      report: candidate,
+      action: "enviar",
+      actor: user("responsable-1", ["responsable"]),
+      now: NOW,
+      eventId: "event-1",
+      submission: submissionFor(indicators),
+    });
+
+  it("valida el contenido real: no se puede enviar un reporte incompleto ni sin contexto de validación", () => {
+    const tracked = indicator();
+    expect(send(report([]), [tracked])).toMatchObject({ ok: false });
+    expect(
+      transition({
+        report: report([value(tracked, 10)]),
+        action: "enviar",
+        actor: user("responsable-1", ["responsable"]),
+        now: NOW,
+        eventId: "event-1",
+      }),
+    ).toMatchObject({ ok: false });
+  });
+
+  it("rechaza dos valores del mismo indicador en lugar de quedarse con el último", () => {
+    const tracked = indicator();
+    const result = send(report([value(tracked, 20), value(tracked, 80)]), [tracked]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((message) => message.includes("más de un valor"))).toBe(true);
+  });
+
+  it("rechaza valores de otro periodo", () => {
+    const tracked = indicator();
+    const result = send(report([{ ...value(tracked, 10), periodId: "2026-T1" }]), [tracked]);
+    expect(result).toMatchObject({ ok: false });
+  });
+
+  it("distingue cero de dato faltante en las cuatro combinaciones", () => {
+    const tracked = indicator();
+    const errorsFor = (amount: number | null, explicitZero: boolean) =>
+      validateForSubmission({
+        ...submissionFor([tracked]),
+        report: report([{ ...value(tracked, amount), explicitZero, notMeasuredReason: amount === null ? "Sin medición este periodo" : "" }]),
+        now: NOW,
+      }).errors;
+    expect(errorsFor(0, true)).toEqual([]);
+    expect(errorsFor(null, false)).toEqual([]);
+    expect(errorsFor(0, false)).toHaveLength(1);
+    expect(errorsFor(null, true)).toHaveLength(1);
+  });
+
+  it("numera cada reenvío con una versión distinta", () => {
+    const tracked = indicator();
+    const first = send(report([value(tracked, 10)]), [tracked]);
+    if (!first.ok) throw new Error("el primer envío debía pasar");
+    const second = send({ ...first.report, status: "devuelto" }, [tracked]);
+    if (!second.ok) throw new Error("el segundo envío debía pasar");
+    const third = send({ ...second.report, status: "devuelto" }, [tracked]);
+    if (!third.ok) throw new Error("el tercer envío debía pasar");
+    expect([first.snapshot?.version, second.snapshot?.version, third.snapshot?.version]).toEqual([1, 2, 3]);
   });
 });
