@@ -5,10 +5,12 @@
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
+import { defaultSettings } from "@/types/medidor";
 import type {
   CausalModel,
   ClimateAlignment,
   Indicator,
+  PlatformSettings,
   ProjectInput,
   SessionAnalysis,
 } from "@/types/medidor";
@@ -27,6 +29,9 @@ export const EMPTY_PROJECT: ProjectInput = {
 interface SessionValue {
   project: ProjectInput;
   setProject: (updater: (prev: ProjectInput) => ProjectInput) => void;
+  /** Marcos de la fundación y reglas de validación. Se conservan al iniciar un análisis nuevo. */
+  settings: PlatformSettings;
+  setSettings: (updater: (prev: PlatformSettings) => PlatformSettings) => void;
   analysis: SessionAnalysis | null;
   setAnalysis: (analysis: SessionAnalysis | null) => void;
   updateCausal: (updater: (prev: CausalModel) => CausalModel) => void;
@@ -44,12 +49,15 @@ const SessionContext = createContext<SessionValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [project, setProjectState] = useState<ProjectInput>(EMPTY_PROJECT);
   const [analysis, setAnalysis] = useState<SessionAnalysis | null>(null);
+  const [settings, setSettingsState] = useState<PlatformSettings>(defaultSettings);
   const [step, setStep] = useState(1);
 
   const value = useMemo<SessionValue>(
     () => ({
       project,
       setProject: (updater) => setProjectState((prev) => updater(prev)),
+      settings,
+      setSettings: (updater) => setSettingsState((prev) => updater(prev)),
       analysis,
       setAnalysis,
       updateCausal: (updater) =>
@@ -85,10 +93,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       reset: () => {
         setProjectState(EMPTY_PROJECT);
         setAnalysis(null);
-        setStep(1);
+        setStep(2);
       },
     }),
-    [project, analysis, step],
+    [project, settings, analysis, step],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

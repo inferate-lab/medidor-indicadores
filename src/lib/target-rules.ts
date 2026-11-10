@@ -95,11 +95,66 @@ export function evaluateTarget(indicator: Indicator): TargetEvaluation {
     );
   }
 
+  incompatibilities.push(...directionIssues(indicator));
+
   return {
     flags: [...new Set(flags)],
     incompatibilities: [...new Set(incompatibilities)],
     canHoldValue: canAcceptValue(t).ok,
   };
+}
+
+/**
+ * Coherencia entre la meta y el sentido de éxito del indicador. Un indicador
+ * descendente (por ejemplo, participantes que dejan de necesitar el programa)
+ * es válido; lo incoherente es una meta que va en sentido contrario.
+ */
+export function directionIssues(indicator: Indicator): string[] {
+  const t = indicator.target;
+  const issues: string[] = [];
+  const comparable = t.value !== null && t.baselineValue !== null;
+  if (indicator.orientation === "descendente" && comparable && t.value! >= t.baselineValue!) {
+    issues.push("El indicador mejora al disminuir, pero la meta no es menor que la línea base.");
+  }
+  if (indicator.orientation === "ascendente" && comparable && t.value! < t.baselineValue!) {
+    issues.push(
+      "La meta es menor que la línea base. Si el éxito consiste en disminuir, cambia el sentido de éxito del indicador.",
+    );
+  }
+  if (
+    indicator.orientation === "rango" &&
+    (t.value !== null || t.lowerBound !== null || t.upperBound !== null) &&
+    (t.lowerBound === null || t.upperBound === null)
+  ) {
+    issues.push("El éxito es permanecer en un rango: la meta necesita límite inferior y superior.");
+  }
+  return issues;
+}
+
+/**
+ * Avance hacia la meta como proporción (1 = meta alcanzada), respetando el
+ * sentido de éxito. Devuelve null cuando falta un dato o cuando el indicador
+ * no se evalúa por avance. Para "estable" y "rango" usa `withinTarget`.
+ */
+export function progressToward(
+  orientation: Indicator["orientation"],
+  baseline: number | null,
+  target: number | null,
+  current: number | null,
+): number | null {
+  if (orientation !== "ascendente" && orientation !== "descendente") return null;
+  if (baseline === null || target === null || current === null || target === baseline) return null;
+  return (current - baseline) / (target - baseline);
+}
+
+/** Para indicadores de rango: si el valor actual está dentro de los límites. */
+export function withinTarget(
+  lowerBound: number | null,
+  upperBound: number | null,
+  current: number | null,
+): boolean | null {
+  if (lowerBound === null || upperBound === null || current === null) return null;
+  return current >= lowerBound && current <= upperBound;
 }
 
 export function canAcceptValue(t: IndicatorTarget): { ok: boolean; reason: string | null } {

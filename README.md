@@ -73,3 +73,9 @@ Su ejecución remota no se ha comprobado hasta subir el proyecto
 Se conserva la lógica de la aplicación original
 La clasificación institucional, seguimiento periódico y demás mejoras continúan como trabajo planificado
 El Site original no se modifica y esta copia no contiene su configuración de publicación
+
+## Marcos de la fundación y reglas ajustables
+
+- El paso 1 define los marcos institucionales (Cuadro de mando integral, Plan de Acción, Seguimiento a la gestión, Teoría del cambio u otros). El catálogo es editable y cada indicador puede pertenecer a varios marcos.
+- Cada indicador admite un código de la fundación y un sentido de éxito: aumentar, disminuir, mantenerse o permanecer en un rango. Un sentido distinto de aumentar exige una justificación escrita.
+- Las reglas del marco lógico viven en `src/lib/framework-rules.ts`. Cada proyecto puede cambiar los mínimos o dejar de aplicar una regla con justificación; el Excel registra las reglas aplicadas.

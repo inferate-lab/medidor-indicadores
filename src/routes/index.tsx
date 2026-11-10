@@ -10,6 +10,7 @@ import {
   FlaskConical,
   Leaf,
   Loader2,
+  Plus,
   RotateCcw,
   ShieldCheck,
   Sparkles,
@@ -20,6 +21,7 @@ import { DEMO_PROJECT, buildDemoAnalysis } from "@/data/demo-project";
 import { ODS_SOURCE } from "@/data/ods-catalog";
 import { analyzeProject } from "@/lib/analyze-project";
 import { extractTextFromFile } from "@/lib/doc-extract";
+import { frameworkNames, reviewLogicalFramework } from "@/lib/framework-rules";
 import { validateAlignments } from "@/lib/ods-rules";
 import { detectEmbeddedInstructions } from "@/lib/sanitize";
 import { SessionProvider, useSession } from "@/lib/session";
@@ -27,14 +29,20 @@ import {
   DIMENSION_LABELS,
   HORIZON_LABELS,
   LEVEL_LABELS,
+  ORIENTATION_LABELS,
+  RULE_DEFINITIONS,
   SPHERE_LABELS,
   type CausalLevel,
   type Indicator,
+  type InstitutionalFramework,
+  type Orientation,
+  type RuleId,
 } from "@/types/medidor";
 
 export const Route = createFileRoute("/")({ component: Index });
 
 const STEPS = [
+  "Marcos de la fundación",
   "Proyecto",
   "Contexto opcional",
   "Indicadores sugeridos",
@@ -77,13 +85,14 @@ function MedidorApp() {
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <Stepper current={step} onSelect={(next) => (next === 1 || analysis ? setStep(next) : undefined)} />
+        <Stepper current={step} onSelect={(next) => (next <= 2 || analysis ? setStep(next) : undefined)} />
         <div className="mt-6">
-          {step === 1 && <ProjectStep />}
-          {step === 2 && analysis && <UnderstandingStep />}
-          {step === 3 && analysis && <IndicatorsStep />}
-          {step === 4 && analysis && <OdsBaselineStep />}
-          {step === 5 && analysis && <LogicalFrameworkStep />}
+          {step === 1 && <FrameworksStep />}
+          {step === 2 && <ProjectStep />}
+          {step === 3 && analysis && <UnderstandingStep />}
+          {step === 4 && analysis && <IndicatorsStep />}
+          {step === 5 && analysis && <OdsBaselineStep />}
+          {step === 6 && analysis && <LogicalFrameworkStep />}
         </div>
       </main>
     </div>
@@ -93,7 +102,7 @@ function MedidorApp() {
 function Stepper({ current, onSelect }: { current: number; onSelect: (step: number) => void }) {
   return (
     <nav aria-label="Progreso del análisis" className="overflow-x-auto">
-      <ol className="flex min-w-[780px] gap-2">
+      <ol className="flex min-w-[940px] gap-2">
         {STEPS.map((label, index) => {
           const number = index + 1;
           const active = number === current;
@@ -147,8 +156,107 @@ function Notice({ kind, children }: { kind: "info" | "success" | "warning" | "er
   return <div className={`rounded-lg border p-3 text-sm ${cls}`}>{children}</div>;
 }
 
+const CAUSAL_LEVELS: CausalLevel[] = ["gestion", "producto", "resultado", "impacto"];
+
+function FrameworksStep() {
+  const { settings, setSettings, setStep } = useSession();
+  const [name, setName] = useState("");
+  const updateFramework = (id: string, updater: (framework: InstitutionalFramework) => InstitutionalFramework) =>
+    setSettings((previous) => ({
+      ...previous,
+      frameworks: previous.frameworks.map((framework) => (framework.id === id ? updater(framework) : framework)),
+    }));
+  const addFramework = () => {
+    const clean = name.trim();
+    if (!clean) return;
+    setSettings((previous) => ({
+      ...previous,
+      frameworks: [
+        ...previous.frameworks,
+        { id: `marco_${Date.now().toString(36)}`, name: clean, description: "", suggestedLevels: [], active: true },
+      ],
+    }));
+    setName("");
+  };
+  return (
+    <div className="space-y-5">
+      <Panel
+        title="Marcos de la fundación"
+        description="Marca los marcos a los que reporta este proyecto. Cada indicador se registra una sola vez y puede pertenecer a varios marcos; los ODS y el marco lógico son la capa común que los unifica."
+      >
+        <Notice kind="info">
+          Este catálogo es un punto de partida. Ajusta los nombres y los niveles a la codificación real de la fundación: los niveles marcados solo definen la clasificación sugerida, que podrás corregir indicador por indicador.
+        </Notice>
+        <div className="mt-4 space-y-3">
+          {settings.frameworks.map((framework) => (
+            <div key={framework.id} className={`rounded-lg border p-4 ${framework.active ? "bg-card" : "bg-muted/40"}`}>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm font-medium">
+                  <input type="checkbox" checked={framework.active} onChange={(event) => updateFramework(framework.id, (old) => ({ ...old, active: event.target.checked }))} />
+                  Aplica a este proyecto
+                </label>
+                <input
+                  aria-label="Nombre del marco"
+                  className={`${inputClass} min-w-56 flex-1 font-semibold`}
+                  value={framework.name}
+                  onChange={(event) => updateFramework(framework.id, (old) => ({ ...old, name: event.target.value }))}
+                />
+                <button
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                  onClick={() => setSettings((previous) => ({ ...previous, frameworks: previous.frameworks.filter((item) => item.id !== framework.id) }))}
+                >
+                  <Trash2 className="size-4" /> Quitar
+                </button>
+              </div>
+              <input
+                aria-label="Descripción del marco"
+                className={`${inputClass} mt-3`}
+                placeholder="Para qué se usa este marco"
+                value={framework.description}
+                onChange={(event) => updateFramework(framework.id, (old) => ({ ...old, description: event.target.value }))}
+              />
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                <span className="text-muted-foreground">Sugerir para indicadores de:</span>
+                {CAUSAL_LEVELS.map((level) => (
+                  <label key={level} className="inline-flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={framework.suggestedLevels.includes(level)}
+                      onChange={(event) => updateFramework(framework.id, (old) => ({
+                        ...old,
+                        suggestedLevels: event.target.checked
+                          ? [...old.suggestedLevels, level]
+                          : old.suggestedLevels.filter((item) => item !== level),
+                      }))}
+                    />
+                    {LEVEL_LABELS[level]}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <input
+            aria-label="Nombre del nuevo marco"
+            className={`${inputClass} max-w-md`}
+            placeholder="Nuevo marco, por ejemplo: Informe a donantes"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") addFramework(); }}
+          />
+          <button className={buttonSecondary} onClick={addFramework} disabled={!name.trim()}><Plus className="size-4" /> Agregar marco</button>
+        </div>
+      </Panel>
+      <div className="flex justify-end">
+        <button className={buttonPrimary} onClick={() => setStep(2)}>Continuar con el proyecto <ArrowRight className="size-4" /></button>
+      </div>
+    </div>
+  );
+}
+
 function ProjectStep() {
-  const { project, setProject, setAnalysis, setStep } = useSession();
+  const { project, setProject, setAnalysis, setStep, settings } = useSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const scan = useMemo(() => detectEmbeddedInstructions(project.text), [project.text]);
@@ -186,10 +294,10 @@ function ProjectStep() {
     }
     setBusy(true);
     try {
-      const result = useDemo ? await buildDemoAnalysis() : await analyzeProject({ data: input });
+      const result = useDemo ? await buildDemoAnalysis(settings) : await analyzeProject({ data: input, settings });
       if (useDemo) setProject(() => DEMO_PROJECT);
       setAnalysis(result);
-      setStep(2);
+      setStep(3);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible analizar el proyecto.");
     } finally {
@@ -331,25 +439,33 @@ function UnderstandingStep() {
           </div>
         </Panel>
       )}
-      <NavButtons back={() => setStep(1)} next={() => setStep(3)} nextLabel="Ver indicadores recomendados" />
+      <NavButtons back={() => setStep(2)} next={() => setStep(4)} nextLabel="Ver indicadores recomendados" />
     </div>
   );
 }
 
 function IndicatorsStep() {
-  const { analysis, updateIndicator, setStep } = useSession();
+  const { analysis, updateIndicator, setStep, settings } = useSession();
+  const [framework, setFramework] = useState("todos");
   const [level, setLevel] = useState<CausalLevel | "todos">("todos");
   const [tier, setTier] = useState<"todos" | Indicator["recommendationTier"]>("todos");
   if (!analysis) return null;
   const included = analysis.indicators.filter((indicator) => indicator.decision !== "excluido");
+  const activeFrameworks = settings.frameworks.filter((item) => item.active);
   const visible = analysis.indicators.filter(
-    (indicator) => (level === "todos" || indicator.level === level) && (tier === "todos" || indicator.recommendationTier === tier),
+    (indicator) =>
+      (level === "todos" || indicator.level === level) &&
+      (tier === "todos" || indicator.recommendationTier === tier) &&
+      (framework === "todos" ||
+        (framework === "sin_marco"
+          ? !activeFrameworks.some((item) => indicator.frameworkIds.includes(item.id))
+          : indicator.frameworkIds.includes(framework))),
   );
   return (
     <div className="space-y-5">
       <Panel title="Qué debes medir en este proyecto" description="Cada propuesta expresa una medición concreta. Acepta las que te sirvan y descarta las que no correspondan al proyecto.">
         <div className="grid gap-3 sm:grid-cols-4">
-          {(["gestion", "producto", "resultado", "impacto"] as CausalLevel[]).map((item) => (
+          {CAUSAL_LEVELS.map((item) => (
             <button key={item} onClick={() => setLevel(item)} className={`rounded-lg border p-3 text-left ${level === item ? "border-primary ring-2 ring-primary/20" : "bg-card"}`}>
               <span className="text-xs text-muted-foreground">{LEVEL_LABELS[item]}</span>
               <div className="mt-1 text-2xl font-semibold">{included.filter((indicator) => indicator.level === item).length}</div>
@@ -369,13 +485,26 @@ function IndicatorsStep() {
           ))}
           <button onClick={() => setLevel("todos")} className="px-3 py-1.5 text-sm text-primary underline">Todos los niveles</button>
         </div>
+        <div className="mt-4 max-w-sm">
+          <Field label="Ver por marco de la fundación">
+            <select className={inputClass} value={framework} onChange={(event) => setFramework(event.target.value)}>
+              <option value="todos">Todos los marcos</option>
+              {activeFrameworks.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} ({included.filter((indicator) => indicator.frameworkIds.includes(item.id)).length})
+                </option>
+              ))}
+              <option value="sin_marco">Sin marco asignado</option>
+            </select>
+          </Field>
+        </div>
       </Panel>
       <div className="space-y-3">
         {visible.map((indicator) => (
           <IndicatorCard key={indicator.id} indicator={indicator} onChange={(next) => updateIndicator(indicator.id, () => next)} />
         ))}
       </div>
-      <NavButtons back={() => setStep(2)} next={() => setStep(4)} />
+      <NavButtons back={() => setStep(3)} next={() => setStep(5)} />
     </div>
   );
 }
@@ -408,6 +537,8 @@ function friendlyBurden(burden: Indicator["measurementBurden"]): string {
 }
 
 function IndicatorCard({ indicator, onChange }: { indicator: Indicator; onChange: (indicator: Indicator) => void }) {
+  const { settings } = useSession();
+  const activeFrameworks = settings.frameworks.filter((framework) => framework.active);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Indicator>(indicator);
@@ -428,6 +559,7 @@ function IndicatorCard({ indicator, onChange }: { indicator: Indicator; onChange
             <Badge>{DIMENSION_LABELS[indicator.dimension]}</Badge>
             {indicator.decision === "modificado" && <Badge>Modificado</Badge>}
             {indicator.isGuardrail && <Badge>Salvaguarda</Badge>}
+            {indicator.orientation !== "ascendente" && <Badge>{ORIENTATION_LABELS[indicator.orientation]}</Badge>}
           </div>
           <h3 className="mt-2 text-base font-semibold">{indicator.name}</h3>
           <p className="mt-2 text-sm"><strong>Qué mide:</strong> {indicator.observedChange}</p>
@@ -461,6 +593,50 @@ function IndicatorCard({ indicator, onChange }: { indicator: Indicator; onChange
           <li><strong>4. Cuándo hacerlo:</strong> {plainLanguage(indicator.frequency)}</li>
         </ol>
         <p className="mt-3 text-muted-foreground"><strong>Tiempo de registro:</strong> {friendlyBurden(indicator.measurementBurden)}</p>
+      </div>
+      <div className="mt-3 rounded-lg border p-4 text-sm">
+        <p className="font-semibold">Clasificación y sentido de éxito</p>
+        <div className="mt-3 grid gap-4 md:grid-cols-[1fr_220px]">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Marcos a los que reporta</span>
+            {activeFrameworks.length === 0 ? (
+              <p className="mt-1 text-muted-foreground">No hay marcos activos. Actívalos en el paso 1.</p>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                {activeFrameworks.map((framework) => (
+                  <label key={framework.id} className="inline-flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={indicator.frameworkIds.includes(framework.id)}
+                      onChange={(event) => onChange({
+                        ...indicator,
+                        frameworkIds: event.target.checked
+                          ? [...indicator.frameworkIds, framework.id]
+                          : indicator.frameworkIds.filter((id) => id !== framework.id),
+                      })}
+                    />
+                    {framework.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <Field label="Código de la fundación" help="El mismo código que usa el Excel de seguimiento.">
+            <input className={inputClass} value={indicator.institutionalCode} placeholder="Ej.: PA-012" onChange={(event) => onChange({ ...indicator, institutionalCode: event.target.value })} />
+          </Field>
+        </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-[280px_1fr]">
+          <Field label="¿Cuándo hay avance?">
+            <select className={inputClass} value={indicator.orientation} onChange={(event) => onChange({ ...indicator, orientation: event.target.value as Orientation })}>
+              {(Object.entries(ORIENTATION_LABELS) as [Orientation, string][]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </Field>
+          {indicator.orientation !== "ascendente" && (
+            <Field label="Por qué ese es el éxito" help="Ejemplo: el convenio busca que las participantes dejen de necesitar el acompañamiento.">
+              <textarea className={`${textareaClass} min-h-16`} value={indicator.orientationRationale} onChange={(event) => onChange({ ...indicator, orientationRationale: event.target.value })} />
+            </Field>
+          )}
+        </div>
       </div>
       {editing && (
         <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
@@ -609,7 +785,7 @@ function OdsBaselineStep() {
           </div>
         </div>
       </Panel>
-      <NavButtons back={() => setStep(3)} next={() => setStep(5)} />
+      <NavButtons back={() => setStep(4)} next={() => setStep(6)} />
     </div>
   );
 }
@@ -639,14 +815,24 @@ function BaselineDetails({ indicator }: { indicator: Indicator }) {
 }
 
 function LogicalFrameworkStep() {
-  const { project, analysis, setStep, reset } = useSession();
+  const { project, analysis, setStep, reset, settings, setSettings } = useSession();
+  const [showRules, setShowRules] = useState(false);
   if (!analysis) return null;
   const included = analysis.indicators.filter((indicator) => indicator.decision === "aprobado" || indicator.decision === "modificado");
-  const review = analysis.logicalFrameworkReview;
+  // La validación se recalcula con el estado actual: decisiones, ediciones y reglas del proyecto.
+  const review = reviewLogicalFramework(project, analysis.causal, analysis.indicators, settings.rules);
+  const rules = settings.rules;
+  const activeFrameworks = settings.frameworks.filter((framework) => framework.active);
   const currentAnalysis = analysis;
+  const setRule = (id: RuleId, patch: Partial<(typeof rules.rules)[RuleId]>) =>
+    setSettings((previous) => ({
+      ...previous,
+      rules: { ...previous.rules, rules: { ...previous.rules.rules, [id]: { ...previous.rules.rules[id], ...patch } } },
+    }));
+  const minimum = (raw: string) => Math.max(0, Math.min(20, Math.trunc(Number(raw)) || 0));
   async function download() {
     const { exportToExcel } = await import("@/lib/excel-export");
-    exportToExcel(project, currentAnalysis);
+    exportToExcel(project, currentAnalysis, settings);
   }
   return (
     <div className="space-y-5">
@@ -656,20 +842,59 @@ function LogicalFrameworkStep() {
         <Metric label="Alertas críticas" value={review.issues.filter((issue) => issue.severity === "critico").length} />
       </div>
       <Panel title="Validación experta del marco lógico" description="El estado no se basa en un puntaje arbitrario. Cada hallazgo identifica la regla incumplida y la acción requerida.">
-        <div className="grid gap-3 sm:grid-cols-5">
-          {Object.entries(review.checks).map(([key, value]) => (
-            <div key={key} className={`rounded-lg border p-3 text-sm ${value ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-              <strong>{value ? "Cumple" : "Revisar"}</strong>
-              <p className="mt-1 text-xs">{{
-                verticalLogic: "Lógica vertical",
-                indicatorCoverage: "Cobertura causal",
-                baselineReadiness: "Plan de línea base",
-                odsTraceability: "Trazabilidad ODS",
-                attributionControl: "Control de atribución",
-              }[key]}</p>
+        <div className="grid gap-3 sm:grid-cols-4">
+          {review.checks.map((check) => (
+            <div key={check.id} className={`rounded-lg border p-3 text-sm ${check.status === "cumple" ? "border-emerald-200 bg-emerald-50 text-emerald-950" : check.status === "revisar" ? "border-amber-200 bg-amber-50 text-amber-950" : "border-slate-200 bg-slate-50 text-slate-900"}`}>
+              <strong>{{ cumple: "Cumple", revisar: "Revisar", exenta: "No se aplica" }[check.status]}</strong>
+              <p className="mt-1 text-xs">{check.label}</p>
             </div>
           ))}
         </div>
+        <button className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary" onClick={() => setShowRules(!showRules)}>
+          <ChevronDown className={`size-4 transition ${showRules ? "rotate-180" : ""}`} />
+          {showRules ? "Cerrar reglas de este proyecto" : "Ajustar las reglas a este proyecto"}
+        </button>
+        {showRules && (
+          <div className="mt-3 space-y-3 rounded-lg border p-4">
+            <p className="text-sm text-muted-foreground">
+              Estos son los lineamientos con los que se valida el marco lógico. Puedes cambiar los mínimos o dejar de aplicar una regla si el proyecto lo amerita; en ese caso escribe la razón, que quedará en el Excel.
+            </p>
+            {RULE_DEFINITIONS.map((rule) => {
+              const setting = rules.rules[rule.id];
+              return (
+                <div key={rule.id} className="rounded-lg border p-3 text-sm">
+                  <label className="flex items-start gap-2">
+                    <input className="mt-1" type="checkbox" checked={setting.enabled} onChange={(event) => setRule(rule.id, { enabled: event.target.checked })} />
+                    <span><strong>{rule.label}.</strong> {rule.description}</span>
+                  </label>
+                  {rule.id === "logicaVertical" && setting.enabled && (
+                    <label className="mt-3 flex flex-wrap items-center gap-2 pl-6">
+                      Mínimo de actividades, productos y resultados:
+                      <input className={`${inputClass} w-20`} type="number" min={0} max={20} value={rules.minChainItems} onChange={(event) => setSettings((previous) => ({ ...previous, rules: { ...previous.rules, minChainItems: minimum(event.target.value) } }))} />
+                    </label>
+                  )}
+                  {rule.id === "cobertura" && setting.enabled && (
+                    <div className="mt-3 flex flex-wrap gap-4 pl-6">
+                      {CAUSAL_LEVELS.map((level) => (
+                        <label key={level} className="flex items-center gap-2">
+                          {LEVEL_LABELS[level]}:
+                          <input className={`${inputClass} w-20`} type="number" min={0} max={20} value={rules.minByLevel[level]} onChange={(event) => setSettings((previous) => ({ ...previous, rules: { ...previous.rules, minByLevel: { ...previous.rules.minByLevel, [level]: minimum(event.target.value) } } }))} />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {!setting.enabled && (
+                    <div className="mt-3 pl-6">
+                      <Field label="Por qué no aplica a este proyecto">
+                        <textarea className={`${textareaClass} min-h-16`} value={setting.justification} onChange={(event) => setRule(rule.id, { justification: event.target.value })} />
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
         {review.issues.length > 0 ? (
           <div className="mt-4 space-y-2">
             {review.issues.map((issue, index) => (
@@ -679,6 +904,34 @@ function LogicalFrameworkStep() {
             ))}
           </div>
         ) : <div className="mt-4"><Notice kind="success">La estructura supera las validaciones automáticas. Aún requiere aprobación humana y datos de línea base.</Notice></div>}
+      </Panel>
+      <Panel title="Indicadores por marco de la fundación" description="Un mismo indicador puede aparecer en varios marcos; se registra y se mide una sola vez.">
+        {activeFrameworks.length === 0 ? <Notice kind="info">No hay marcos activos en el paso 1.</Notice> : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-sm">
+              <thead><tr className="bg-muted">
+                <th className="border p-2 text-left">Marco</th>
+                {CAUSAL_LEVELS.map((level) => <th key={level} className="border p-2 text-right">{LEVEL_LABELS[level]}</th>)}
+                <th className="border p-2 text-right">Total</th>
+              </tr></thead>
+              <tbody>
+                {activeFrameworks.map((framework) => {
+                  const own = included.filter((indicator) => indicator.frameworkIds.includes(framework.id));
+                  return (
+                    <tr key={framework.id}>
+                      <td className="border p-2 font-medium">{framework.name}</td>
+                      {CAUSAL_LEVELS.map((level) => <td key={level} className="border p-2 text-right">{own.filter((indicator) => indicator.level === level).length}</td>)}
+                      <td className="border p-2 text-right font-semibold">{own.length}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {included.some((indicator) => frameworkNames(indicator, activeFrameworks).length === 0) && (
+          <div className="mt-3"><Notice kind="warning">Hay indicadores seleccionados sin marco asignado: {included.filter((indicator) => frameworkNames(indicator, activeFrameworks).length === 0).map((indicator) => indicator.name).join("; ")}.</Notice></div>
+        )}
       </Panel>
       <Panel title="Marco lógico sugerido" description="Vista resumida. El Excel incluye la matriz completa con indicadores, línea base, meta pendiente, medios de verificación y supuestos.">
         <div className="overflow-x-auto">
@@ -705,7 +958,7 @@ function LogicalFrameworkStep() {
         </div>
         <div className="mt-5 flex flex-wrap gap-3">
           <button className={buttonPrimary} onClick={download} disabled={included.length === 0}><Download className="size-4" /> Descargar marco lógico en Excel</button>
-          <button className={buttonSecondary} onClick={() => setStep(4)}><ArrowLeft className="size-4" /> Revisar ODS y líneas base</button>
+          <button className={buttonSecondary} onClick={() => setStep(5)}><ArrowLeft className="size-4" /> Revisar ODS y líneas base</button>
           <button className={buttonSecondary} onClick={reset}><RotateCcw className="size-4" /> Nuevo análisis</button>
         </div>
       </Panel>

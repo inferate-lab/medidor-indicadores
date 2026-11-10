@@ -6,15 +6,18 @@ import {
 } from "@/data/indicator-library";
 import { bidReferencesForIndicator } from "@/data/bid-catalog";
 import { colombiaReferencesForIndicator } from "@/data/colombia-context-catalog";
+import { reviewLogicalFramework, suggestFrameworkIds } from "@/lib/framework-rules";
 import { buildAlignment } from "@/lib/ods-rules";
 import {
   SECTOR_LABELS,
+  defaultSettings,
   emptyTarget,
   type CausalLevel,
   type DetectedSector,
   type Indicator,
+  type InstitutionalFramework,
   type InternationalReference,
-  type LogicalFrameworkIssue,
+  type PlatformSettings,
   type ProjectInput,
   type SectorKey,
   type SessionAnalysis,
@@ -386,6 +389,7 @@ function makeIndicator(
   template: IndicatorTemplate,
   project: ProjectInput,
   allSentences: string[],
+  frameworks: InstitutionalFramework[],
 ): Indicator {
   const evidence = evidenceFor(allSentences, template.keywords, 3);
   const concrete = concreteIndicatorCopy(template, project);
@@ -435,6 +439,9 @@ function makeIndicator(
     territory: project.territory || "Pendiente de confirmación",
     unit: concrete.unit,
     orientation: "ascendente",
+    orientationRationale: "",
+    institutionalCode: "",
+    frameworkIds: suggestFrameworkIds(template.level, frameworks),
     accumulation: template.accumulation,
     numerator: concrete.numerator,
     denominator: concrete.denominator,
@@ -484,94 +491,6 @@ function makeIndicator(
     colombiaReferences,
     odsAlignments,
     target,
-  };
-}
-
-function reviewLogicalFramework(
-  project: ProjectInput,
-  causal: ReturnType<typeof causalModel>,
-  indicators: Indicator[],
-) {
-  const issues: LogicalFrameworkIssue[] = [];
-  if (!project.targetPopulation) {
-    issues.push({
-      severity: "critico",
-      area: "Población",
-      message: "No se identificó una población objetivo verificable.",
-      action: "Definir quién participa, quién se beneficia y los criterios de elegibilidad.",
-    });
-  }
-  if (!project.territory) {
-    issues.push({
-      severity: "importante",
-      area: "Territorio",
-      message: "La unidad territorial de análisis no está confirmada.",
-      action: "Precisar municipios, instituciones, comunidades o ecosistemas incluidos.",
-    });
-  }
-  if (causal.activities.length < 2 || causal.outputs.length < 2 || causal.outcomes.length < 2) {
-    issues.push({
-      severity: "critico",
-      area: "Lógica vertical",
-      message: "La cadena actividad–producto–resultado no tiene evidencia suficiente en los documentos.",
-      action: "Completar los niveles faltantes y comprobar que cada enlace expresa un mecanismo plausible.",
-    });
-  }
-  const counts = indicators.reduce<Record<CausalLevel, number>>(
-    (acc, indicator) => ({ ...acc, [indicator.level]: acc[indicator.level] + 1 }),
-    { gestion: 0, producto: 0, resultado: 0, impacto: 0 },
-  );
-  if (counts.resultado < 2) {
-    issues.push({
-      severity: "critico",
-      area: "Resultados",
-      message: "La batería no contiene suficientes indicadores de cambio en capacidades, prácticas o condiciones.",
-      action: "Incorporar resultados que vayan más allá de cobertura y entregables.",
-    });
-  }
-  if (
-    indicators.some((indicator) => {
-      const primaryAlignment = indicator.odsAlignments[0];
-      return primaryAlignment ? !primaryAlignment.causalRationale : false;
-    })
-  ) {
-    issues.push({
-      severity: "importante",
-      area: "ODS",
-      message: "Existe una relación ODS sin justificación causal.",
-      action: "Explicar cómo el resultado contribuye a la meta ODS y diferenciar contribución de atribución.",
-    });
-  }
-  if (indicators.some((indicator) => indicator.level === "impacto" && !indicator.attributionLimits)) {
-    issues.push({
-      severity: "importante",
-      area: "Atribución",
-      message: "Un indicador de impacto no declara factores externos ni límites de atribución.",
-      action: "Añadir análisis de contribución o un diseño evaluativo proporcional.",
-    });
-  }
-  const checks = {
-    verticalLogic: causal.activities.length >= 2 && causal.outputs.length >= 2 && causal.outcomes.length >= 2,
-    indicatorCoverage: counts.gestion >= 2 && counts.producto >= 2 && counts.resultado >= 2 && counts.impacto >= 1,
-    baselineReadiness: indicators.every((indicator) => Boolean(indicator.baselinePlan.method && indicator.baselinePlan.instrument)),
-    odsTraceability: indicators.some((indicator) => indicator.odsAlignments.length > 0),
-    attributionControl: indicators
-      .filter((indicator) => indicator.level === "impacto")
-      .every((indicator) => Boolean(indicator.attributionLimits)),
-  };
-  return {
-    status: issues.some((issue) => issue.severity === "critico")
-      ? ("incompleto" as const)
-      : issues.length
-        ? ("requiere_ajustes" as const)
-        : ("coherente" as const),
-    strengths: [
-      `La batería combina ${counts.gestion} indicadores de gestión, ${counts.producto} de producto, ${counts.resultado} de resultado y ${counts.impacto} de impacto.`,
-      "Cada indicador incluye una línea base sugerida, fórmula, fuente, instrumento y referencia internacional.",
-      "La alineación ODS está separada de la meta cuantitativa del proyecto.",
-    ],
-    issues,
-    checks,
   };
 }
 
@@ -651,14 +570,20 @@ function validateInput(data: ProjectInput): void {
   }
 }
 
-export async function analyzeProject({ data }: { data: ProjectInput }): Promise<SessionAnalysis> {
+export async function analyzeProject({
+  data,
+  settings = defaultSettings(),
+}: {
+  data: ProjectInput;
+  settings?: PlatformSettings;
+}): Promise<SessionAnalysis> {
   validateInput(data);
   const allSentences = sentences(data.text);
   const detectedSectors = detectSectors(data, allSentences);
   const causal = causalModel(data, allSentences, detectedSectors);
   const templates = selectTemplates(`${data.sector} ${data.text}`, detectedSectors);
-  const indicators = templates.map((template) => makeIndicator(template, data, allSentences));
-  const logicalFrameworkReview = reviewLogicalFramework(data, causal, indicators);
+  const indicators = templates.map((template) => makeIndicator(template, data, allSentences, settings.frameworks));
+  const logicalFrameworkReview = reviewLogicalFramework(data, causal, indicators, settings.rules);
   return {
     origin: "motor_local",
     generatedAt: new Date().toISOString(),
