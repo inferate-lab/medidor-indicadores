@@ -12,7 +12,9 @@
     "test": "vitest run",
     "check": "npm run test && npm run build",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "build:static": "vite build -c vite.static.config.ts",
+    "preview:static": "vite preview -c vite.static.config.ts"
   },
   "overrides": {
     "rolldown": "1.2.1"

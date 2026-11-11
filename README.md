@@ -102,3 +102,10 @@ El Site original no se modifica y esta copia no contiene su configuración de pu
 - Por proyecto muestra lo hecho frente a lo planeado, el avance mensual, las asistencias y una señal por actividad (mejor desempeño, para revisar, sin ejecución registrada) con sus cifras.
 - Propone los indicadores que faltan, una meta ODS por tema, referencias del catálogo del BID y un borrador de teoría de cambio y marco lógico. Lo que no sale de una cifra del Excel se rotula como sugerencia o hipótesis.
 - El botón "Ver un ejemplo ficticio" carga datos inventados con el mismo formato. Detalle en `docs/REPORTE_FASE_MONITOR_EJECUCION.md`.
+
+## Publicación en GitHub Pages
+
+- `npm run build:static` genera `dist-static/`: una versión de una sola página, sin servidor, que funciona igual porque todo el análisis ocurre en el navegador.
+- `.github/workflows/pages.yml` la compila y la publica cada vez que se fusiona en `main` (o manualmente desde la pestaña Actions). Antes de publicar ejecuta las pruebas.
+- GitHub Pages exige que el repositorio sea público o que la cuenta tenga un plan de pago.
+- El sitio publicado es público: cualquiera con la dirección puede abrirlo. Los archivos que se cargan no salen del navegador de quien los usa.
