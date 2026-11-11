@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { ExecutionMonitor } from "@/components/ExecutionMonitor";
 import { DEMO_PROJECT, buildDemoAnalysis } from "@/data/demo-project";
 import { ODS_SOURCE } from "@/data/ods-catalog";
 import { analyzeProject } from "@/lib/analyze-project";
@@ -74,6 +75,7 @@ function Index() {
 
 function MedidorApp() {
   const { step, setStep, analysis } = useSession();
+  const [mode, setMode] = useState<"monitor" | "design">("monitor");
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b bg-primary text-primary-foreground">
@@ -81,7 +83,7 @@ function MedidorApp() {
           <div className="rounded-lg bg-white/10 p-2"><Leaf aria-hidden className="size-6" /></div>
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/70">
-              Recomendación de indicadores para cooperación internacional
+              Monitoreo, evaluación y aprendizaje de proyectos
             </p>
             <h1 className="text-xl font-semibold sm:text-2xl">Medidor de Indicadores</h1>
           </div>
@@ -91,15 +93,29 @@ function MedidorApp() {
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <Stepper current={step} onSelect={(next) => (next <= 2 || analysis ? setStep(next) : undefined)} />
-        <div className="mt-6">
-          {step === 1 && <FrameworksStep />}
-          {step === 2 && <ProjectStep />}
-          {step === 3 && analysis && <UnderstandingStep />}
-          {step === 4 && analysis && <IndicatorsStep />}
-          {step === 5 && analysis && <OdsBaselineStep />}
-          {step === 6 && analysis && <LogicalFrameworkStep />}
+        <div className="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="Qué quieres hacer">
+          <button role="tab" aria-selected={mode === "monitor"} onClick={() => setMode("monitor")} className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${mode === "monitor" ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:border-primary/40"}`}>
+            Monitorear proyectos en ejecución
+          </button>
+          <button role="tab" aria-selected={mode === "design"} onClick={() => setMode("design")} className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${mode === "design" ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:border-primary/40"}`}>
+            Diseñar indicadores para un proyecto nuevo
+          </button>
         </div>
+        {mode === "monitor" ? (
+          <ExecutionMonitor />
+        ) : (
+          <>
+            <Stepper current={step} onSelect={(next) => (next <= 2 || analysis ? setStep(next) : undefined)} />
+            <div className="mt-6">
+              {step === 1 && <FrameworksStep />}
+              {step === 2 && <ProjectStep />}
+              {step === 3 && analysis && <UnderstandingStep />}
+              {step === 4 && analysis && <IndicatorsStep />}
+              {step === 5 && analysis && <OdsBaselineStep />}
+              {step === 6 && analysis && <LogicalFrameworkStep />}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
