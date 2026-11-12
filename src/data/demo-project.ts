@@ -1,5 +1,6 @@
 import { analyzeProject } from "@/lib/analyze-project";
-import type { ProjectInput, SessionAnalysis } from "@/types/medidor";
+import { defaultSettings } from "@/types/medidor";
+import type { PlatformSettings, ProjectInput, SessionAnalysis } from "@/types/medidor";
 
 export const DEMO_PROJECT: ProjectInput = {
   name: "Robótica escolar circular para el aprendizaje STEM",
@@ -18,7 +19,9 @@ Las instituciones deberán incorporar la metodología en sus prácticas educativ
 El documento no contiene una línea base de competencias STEM, apropiación del conocimiento, uso previo de robótica ni cantidad confirmada de kits o estudiantes.`,
 };
 
-export async function buildDemoAnalysis(): Promise<SessionAnalysis> {
-  const analysis = await analyzeProject({ data: DEMO_PROJECT });
+export async function buildDemoAnalysis(
+  settings: PlatformSettings = defaultSettings(),
+): Promise<SessionAnalysis> {
+  const analysis = await analyzeProject({ data: DEMO_PROJECT, settings });
   return { ...analysis, origin: "demostracion" };
 }

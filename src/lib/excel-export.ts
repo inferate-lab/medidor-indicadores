@@ -1,7 +1,8 @@
 /**
  * Exportación a Excel (SheetJS, 100% en el navegador).
  *
- * Hojas: Resumen, Marco lógico sugerido, Indicadores, Alineación ODS, Pendientes.
+ * Hojas: Resumen, Indicadores, Marco lógico sugerido, Alineación ODS, Referencias,
+ * Marcos de la fundación, Reglas aplicadas y Pendientes.
  * No exporta resultados medidos: solo el diseño de medición recomendado.
  * Las celdas sin evidencia quedan vacías, nunca en 0.
  */
@@ -11,19 +12,30 @@ import * as XLSX from "xlsx";
 import { findTarget, ODS_SOURCE } from "@/data/ods-catalog";
 import { BID_CATALOG_SOURCE } from "@/data/bid-catalog";
 import { sanitizeCell } from "@/lib/sanitize";
+import { assessSmart } from "@/lib/smart-rules";
 import { canAcceptValue, evaluateTarget } from "@/lib/target-rules";
+import { REPORT_TEMPLATE_SHEET, templateRows } from "@/lib/excel-import";
+import { frameworkNames, reviewLogicalFramework } from "@/lib/framework-rules";
 import { detectOdsWashing } from "@/lib/ods-rules";
 import {
+  CAUSAL_LINK_LABELS,
   DECISION_LABELS,
   DETERMINATION_LABELS,
   DIMENSION_LABELS,
   EVIDENCE_LABELS,
   HORIZON_LABELS,
   LEVEL_LABELS,
+  ORIENTATION_LABELS,
+  RULE_DEFINITIONS,
   REVIEW_LABELS,
+  defaultSettings,
+  SMART_LABELS,
   SPHERE_LABELS,
   type CausalLevel,
+  type CausalLinkKey,
+  type SmartCriterion,
   type Indicator,
+  type PlatformSettings,
   type ProjectInput,
   type SessionAnalysis,
 } from "@/types/medidor";
@@ -83,9 +95,16 @@ function list(values: string[]): string {
   return values.filter((v) => v.trim().length > 0).join("; ");
 }
 
-export function buildWorkbook(project: ProjectInput, analysis: SessionAnalysis): XLSX.WorkBook {
+export function buildWorkbook(
+  project: ProjectInput,
+  analysis: SessionAnalysis,
+  settings: PlatformSettings = defaultSettings(),
+): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
   const included = analysis.indicators.filter((i) => i.decision === "aprobado" || i.decision === "modificado");
+  const activeFrameworks = settings.frameworks.filter((framework) => framework.active);
+  // Se recalcula con las decisiones, ediciones y reglas vigentes al exportar.
+  const review = reviewLogicalFramework(project, analysis.causal, analysis.indicators, settings.rules);
 
   const resumen: Row[] = [
     ["Campo", "Contenido"],
@@ -103,7 +122,11 @@ export function buildWorkbook(project: ProjectInput, analysis: SessionAnalysis):
     ["Problema", analysis.causal.problem || null],
     ["Causas", list(analysis.causal.causes) || null],
     ["Brechas", list(analysis.causal.gaps) || null],
-    ["Supuestos", list(analysis.causal.assumptions) || null],
+    ["Recursos", list(analysis.causal.resources) || null],
+    ...(Object.keys(CAUSAL_LINK_LABELS) as CausalLinkKey[]).map(
+      (key): Row => [`Supuesto: ${CAUSAL_LINK_LABELS[key].toLowerCase()}`, analysis.causal.linkAssumptions[key].trim() || "PENDIENTE"],
+    ),
+    ["Supuestos generales", list(analysis.causal.assumptions) || null],
     ["Riesgos", list(analysis.causal.risks) || null],
     ["Factores externos", list(analysis.causal.externalFactors) || null],
     ["Teoría del Cambio preliminar", analysis.causal.preliminaryTheoryOfChange || null],
@@ -131,7 +154,9 @@ export function buildWorkbook(project: ProjectInput, analysis: SessionAnalysis):
   XLSX.utils.book_append_sheet(wb, sheetFromRows(resumen, [34, 90]), "Resumen");
 
   const indHeader: Row = [
+    "Código de la fundación",
     "Nombre",
+    "Marcos de la fundación",
     "Prioridad de recomendación",
     "Razón de recomendación",
     "Evidencia del proyecto",
@@ -145,7 +170,8 @@ export function buildWorkbook(project: ProjectInput, analysis: SessionAnalysis):
     "Población",
     "Territorio",
     "Unidad",
-    "Orientación",
+    "Sentido de éxito",
+    "Justificación del sentido de éxito",
     "Acumulación",
     "Numerador",
     "Denominador",
@@ -201,7 +227,9 @@ export function buildWorkbook(project: ProjectInput, analysis: SessionAnalysis):
     const evaluation = evaluateTarget(i);
     const supportedTarget = canAcceptValue(i.target).ok;
     return [
+      i.institutionalCode || null,
       i.name,
+      list(frameworkNames(i, activeFrameworks)) || null,
       i.recommendationTier,
       i.recommendationRationale,
       list(i.projectEvidence),
@@ -215,7 +243,8 @@ export function buildWorkbook(project: ProjectInput, analysis: SessionAnalysis):
       i.population,
       i.territory,
       i.unit,
-      i.orientation,
+      ORIENTATION_LABELS[i.orientation],
+      i.orientationRationale || null,
       i.accumulation,
       i.numerator,
       i.denominator,
@@ -272,7 +301,7 @@ export function buildWorkbook(project: ProjectInput, analysis: SessionAnalysis):
   });
   const indSheet = sheetFromRows(
     [indHeader, ...indRows],
-    indHeader.map((_, index) => (index === 0 ? 40 : 26)),
+    indHeader.map((_, index) => (index === 1 ? 40 : 26)),
   );
   tintLevels(
     indSheet,
@@ -420,12 +449,106 @@ export function buildWorkbook(project: ProjectInput, analysis: SessionAnalysis):
     "Referencias BID y Colombia",
   );
 
+  const frameworkHeader: Row = [
+    "Marco de la fundación",
+    "Descripción",
+    "Código de la fundación",
+    "Indicador",
+    "Nivel causal",
+    "Sentido de éxito",
+    "ODS y metas",
+  ];
+  const frameworkRows: Row[] = [];
+  for (const framework of activeFrameworks) {
+    const own = included.filter((indicator) => indicator.frameworkIds.includes(framework.id));
+    if (own.length === 0) {
+      frameworkRows.push([framework.name, framework.description || null, null, "Sin indicadores asignados", null, null, null]);
+    }
+    for (const indicator of own) {
+      frameworkRows.push([
+        framework.name,
+        framework.description || null,
+        indicator.institutionalCode || null,
+        indicator.name,
+        LEVEL_LABELS[indicator.level],
+        ORIENTATION_LABELS[indicator.orientation],
+        indicator.odsAlignments.map((alignment) => alignment.targetCode).join("; ") || null,
+      ]);
+    }
+  }
+  for (const indicator of included) {
+    if (frameworkNames(indicator, activeFrameworks).length > 0) continue;
+    frameworkRows.push([
+      "Sin marco asignado",
+      null,
+      indicator.institutionalCode || null,
+      indicator.name,
+      LEVEL_LABELS[indicator.level],
+      ORIENTATION_LABELS[indicator.orientation],
+      indicator.odsAlignments.map((alignment) => alignment.targetCode).join("; ") || null,
+    ]);
+  }
+  XLSX.utils.book_append_sheet(
+    wb,
+    sheetFromRows([frameworkHeader, ...frameworkRows], [32, 46, 22, 60, 20, 34, 22]),
+    "Marcos de la fundación",
+  );
+
+  const smartKeys = Object.keys(SMART_LABELS) as SmartCriterion[];
+  const smartHeader: Row = ["Indicador", ...smartKeys.map((key) => SMART_LABELS[key]), "Qué corregir"];
+  const smartRows: Row[] = included.map((indicator) => {
+    const smart = assessSmart(indicator, analysis.causal);
+    return [
+      indicator.name,
+      ...smartKeys.map((key) => (smart.criteria[key].ok ? "Cumple" : "Revisar")),
+      smart.failed.map((key) => `${SMART_LABELS[key]}: ${smart.criteria[key].reason}`).join(" ") || null,
+    ];
+  });
+  XLSX.utils.book_append_sheet(
+    wb,
+    sheetFromRows([smartHeader, ...smartRows], [60, 14, 14, 14, 14, 20, 80]),
+    "Matriz SMART",
+  );
+
+  const rulesHeader: Row = ["Regla", "Qué exige", "Aplicación en este proyecto", "Parámetros", "Resultado", "Justificación si no se aplica"];
+  const rulesRows: Row[] = RULE_DEFINITIONS.map((rule) => {
+    const setting = settings.rules.rules[rule.id];
+    const status = review.checks.find((check) => check.id === rule.id)?.status;
+    const parameters =
+      rule.id === "logicaVertical"
+        ? `Mínimo por nivel de la cadena: ${settings.rules.minChainItems}`
+        : rule.id === "cobertura"
+          ? `Gestión ${settings.rules.minByLevel.gestion}; producto ${settings.rules.minByLevel.producto}; resultado ${settings.rules.minByLevel.resultado}; impacto ${settings.rules.minByLevel.impacto}`
+          : null;
+    return [
+      rule.label,
+      rule.description,
+      setting.enabled ? "Se aplica" : "No se aplica",
+      setting.enabled ? parameters : null,
+      status === "cumple" ? "Cumple" : status === "revisar" ? "Revisar" : "No evaluada",
+      setting.enabled ? null : setting.justification.trim() || "SIN JUSTIFICACIÓN",
+    ];
+  });
+  XLSX.utils.book_append_sheet(
+    wb,
+    sheetFromRows([rulesHeader, ...rulesRows], [26, 70, 24, 46, 16, 60]),
+    "Reglas aplicadas",
+  );
+
+  // Plantilla que el equipo diligencia cada periodo y vuelve a cargar con importMeasurements.
+  const template = templateRows(included);
+  XLSX.utils.book_append_sheet(
+    wb,
+    sheetFromRows(template, [24, 60, 26, 34, 14, 14, 24, 40, 40, 40]),
+    REPORT_TEMPLATE_SHEET,
+  );
+
   const pendHeader: Row = ["Origen", "Asunto", "Detalle", "Estado"];
   const pendRows: Row[] = [];
   for (const w of analysis.warnings) {
     pendRows.push(["Análisis", w.field, w.message, "Abierto"]);
   }
-  for (const issue of analysis.logicalFrameworkReview.issues) {
+  for (const issue of review.issues) {
     pendRows.push([
       "Validación del marco lógico",
       `${issue.severity.toUpperCase()} — ${issue.area}`,
@@ -462,8 +585,12 @@ export function buildWorkbook(project: ProjectInput, analysis: SessionAnalysis):
   return wb;
 }
 
-export function exportToExcel(project: ProjectInput, analysis: SessionAnalysis): void {
-  const wb = buildWorkbook(project, analysis);
+export function exportToExcel(
+  project: ProjectInput,
+  analysis: SessionAnalysis,
+  settings: PlatformSettings = defaultSettings(),
+): void {
+  const wb = buildWorkbook(project, analysis, settings);
   const base = (project.name || "medidor-de-indicadores")
     .toLowerCase()
     .normalize("NFD")

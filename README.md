@@ -73,3 +73,25 @@ Su ejecución remota no se ha comprobado hasta subir el proyecto
 Se conserva la lógica de la aplicación original
 La clasificación institucional, seguimiento periódico y demás mejoras continúan como trabajo planificado
 El Site original no se modifica y esta copia no contiene su configuración de publicación
+
+## Marcos de la fundación y reglas ajustables
+
+- El paso 1 define los marcos institucionales (Cuadro de mando integral, Plan de Acción, Seguimiento a la gestión, Teoría del cambio u otros). El catálogo es editable y cada indicador puede pertenecer a varios marcos.
+- Cada indicador admite un código de la fundación y un sentido de éxito: aumentar, disminuir, mantenerse o permanecer en un rango. Un sentido distinto de aumentar exige una justificación escrita.
+- Las reglas del marco lógico viven en `src/lib/framework-rules.ts`. Cada proyecto puede cambiar los mínimos o dejar de aplicar una regla con justificación; el Excel registra las reglas aplicadas.
+
+## Teoría de cambio y revisión SMART
+
+- La cadena causal pide un supuesto por cada enlace (actividades a productos, productos a resultados, resultados a impacto). La aplicación no los inventa: los vacíos quedan como pendientes.
+- `src/lib/smart-rules.ts` revisa cada indicador definitivo por criterio SMART, sin puntaje, y señala resultados que parecen describir entregas.
+
+## Flujo de reporte periódico (sin interfaz todavía)
+
+- `src/types/reporting.ts` y `src/lib/reporting-workflow.ts` definen reportes por periodo, permisos por rol con segregación de funciones, transiciones validadas (borrador, enviado, en revisión, devuelto, aprobado, reabierto), versiones y avance según el sentido de éxito.
+- Son funciones puras con pruebas. Conectarlas a pantallas requiere persistencia y autenticación en servidor.
+
+## Plantilla de reporte e importación desde Excel
+
+- El Excel exportado incluye la hoja "Plantilla de reporte", con una fila por indicador seleccionado. `src/lib/excel-import.ts` la lee diligenciada usando el código de la fundación como llave.
+- La importación no corrige en silencio: un vacío no es cero, un cero debe confirmarse, los códigos duplicados o desconocidos se rechazan y cada problema indica su fila.
+- El marco lógico se evalúa con los indicadores seleccionados en cuanto existe alguno, y no exige indicadores ni supuestos de impacto cuando la teoría de cambio no define impacto.

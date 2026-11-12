@@ -10,10 +10,16 @@ import { detectEmbeddedInstructions, sanitizeCell } from "@/lib/sanitize";
 import {
   canAcceptValue,
   coalesceMissing,
+  directionIssues,
+  progressToward,
+  withinTarget,
   evaluateTarget,
   parseNumericInput,
 } from "@/lib/target-rules";
-import { emptyTarget } from "@/types/medidor";
+import { importMeasurements, readWorkbookRows, REPORT_TEMPLATE_SHEET } from "@/lib/excel-import";
+import { reviewLogicalFramework } from "@/lib/framework-rules";
+import { assessSmart, outcomesThatLookLikeOutputs } from "@/lib/smart-rules";
+import { defaultRules, defaultSettings, emptyTarget } from "@/types/medidor";
 
 describe("integridad de datos", () => {
   it("mantiene los faltantes como null y conserva cero explícito", () => {
@@ -153,11 +159,11 @@ describe("metas y exportación", () => {
     );
   });
 
-  it("genera las cinco hojas requeridas", async () => {
+  it("genera las hojas requeridas", async () => {
     const analysis = await buildDemoAnalysis();
     analysis.indicators[0]!.decision = "aprobado";
     const workbook = buildWorkbook(DEMO_PROJECT, analysis);
-    expect(workbook.SheetNames).toEqual(["Resumen", "Indicadores", "Marco lógico sugerido", "Alineación ODS", "Referencias BID y Colombia", "Pendientes"]);
+    expect(workbook.SheetNames).toEqual(["Resumen", "Indicadores", "Marco lógico sugerido", "Alineación ODS", "Referencias BID y Colombia", "Marcos de la fundación", "Matriz SMART", "Reglas aplicadas", "Plantilla de reporte", "Pendientes"]);
   });
 
   it("exporta E2050 y mantiene las metas numéricas vacías sin evidencia", async () => {
@@ -210,5 +216,247 @@ describe("metas y exportación", () => {
     expect(access.bidReferences.map((reference) => reference.code)).toContain("2.18");
     expect(access.colombiaReferences.some((reference) => reference.source.includes("Superintendencia"))).toBe(true);
     expect(access.target.value).toBeNull();
+  });
+});
+
+describe("marcos de la fundación y reglas ajustables", () => {
+  it("clasifica cada indicador en los marcos activos sugeridos para su nivel", async () => {
+    const settings = defaultSettings();
+    settings.frameworks = settings.frameworks.map((framework) =>
+      framework.id === "cmi" ? { ...framework, active: false } : framework,
+    );
+    const analysis = await buildDemoAnalysis(settings);
+    const management = analysis.indicators.find((indicator) => indicator.level === "gestion")!;
+    const outcome = analysis.indicators.find((indicator) => indicator.level === "resultado")!;
+    expect(management.frameworkIds).toEqual(["plan_accion", "seguimiento_gestion"]);
+    expect(outcome.frameworkIds).toEqual(["teoria_cambio"]);
+  });
+
+  it("acepta un indicador descendente justificado y señala el que no explica su sentido", async () => {
+    const analysis = await buildDemoAnalysis();
+    const rules = defaultRules();
+    const indicator = analysis.indicators[0]!;
+    indicator.orientation = "descendente";
+    const without = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, rules);
+    expect(without.checks.find((check) => check.id === "sentidoExito")?.status).toBe("revisar");
+    indicator.orientationRationale = "El convenio busca que las participantes dejen de necesitar el acompañamiento.";
+    const justified = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, rules);
+    expect(justified.checks.find((check) => check.id === "sentidoExito")?.status).toBe("cumple");
+  });
+
+  it("mide el avance según el sentido de éxito y detecta metas en sentido contrario", async () => {
+    // 120 participantes al inicio, meta 40: bajar a 80 es la mitad del camino.
+    expect(progressToward("descendente", 120, 40, 80)).toBeCloseTo(0.5);
+    expect(progressToward("ascendente", 10, 50, 30)).toBeCloseTo(0.5);
+    expect(progressToward("descendente", 120, null, 80)).toBeNull();
+    expect(withinTarget(10, 20, 15)).toBe(true);
+    const analysis = await buildDemoAnalysis();
+    const indicator = analysis.indicators[0]!;
+    indicator.orientation = "descendente";
+    indicator.target = { ...emptyTarget(), value: 150, baselineValue: 120 };
+    expect(directionIssues(indicator)).toHaveLength(1);
+    indicator.target = { ...emptyTarget(), value: 40, baselineValue: 120 };
+    expect(directionIssues(indicator)).toHaveLength(0);
+  });
+
+  it("permite cambiar umbrales y exige justificación al desactivar una regla", async () => {
+    const analysis = await buildDemoAnalysis();
+    const strict = defaultRules();
+    strict.minByLevel.impacto = 5;
+    const failing = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, strict);
+    expect(failing.checks.find((check) => check.id === "cobertura")?.status).toBe("revisar");
+
+    strict.rules.cobertura = { enabled: false, justification: "" };
+    const unjustified = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, strict);
+    expect(unjustified.checks.find((check) => check.id === "cobertura")?.status).toBe("exenta");
+    expect(unjustified.issues.some((issue) => issue.area.startsWith("Regla no aplicada"))).toBe(true);
+
+    strict.rules.cobertura.justification = "Proyecto piloto de seis meses sin medición de impacto.";
+    const justified = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, strict);
+    expect(justified.issues.some((issue) => issue.area.startsWith("Regla no aplicada"))).toBe(false);
+    expect(justified.exemptions).toEqual([
+      { rule: "Cobertura causal", justification: "Proyecto piloto de seis meses sin medición de impacto." },
+    ]);
+  });
+
+  it("exporta marcos, código institucional y reglas aplicadas", async () => {
+    const analysis = await buildDemoAnalysis();
+    analysis.indicators[0]!.decision = "aprobado";
+    analysis.indicators[0]!.institutionalCode = "PA-012";
+    const workbook = buildWorkbook(DEMO_PROJECT, analysis, defaultSettings());
+    const frameworks = XLSX.utils.sheet_to_json(workbook.Sheets["Marcos de la fundación"]!, { header: 1 }) as unknown[][];
+    expect(frameworks.flat()).toContain("PA-012");
+    const rules = XLSX.utils.sheet_to_json(workbook.Sheets["Reglas aplicadas"]!, { header: 1 }) as unknown[][];
+    expect(rules).toHaveLength(12);
+  });
+});
+
+describe("teoría de cambio: supuestos por enlace y SMART", () => {
+  it("no inventa supuestos: los enlaces vacíos quedan pendientes hasta que el equipo los escribe", async () => {
+    const analysis = await buildDemoAnalysis();
+    const rules = defaultRules();
+    const status = () =>
+      reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, rules).checks.find(
+        (check) => check.id === "supuestosEnlace",
+      )?.status;
+    expect(status()).toBe("revisar");
+    analysis.causal.linkAssumptions = {
+      actividad_producto: "Si se forman docentes, entonces usarán los kits porque cuentan con guía y tiempo de aula.",
+      producto_resultado: "Si los kits están disponibles, entonces los estudiantes practican porque los clubes funcionan cada semana.",
+      resultado_impacto: "Si mejoran sus competencias, entonces continuarán trayectorias STEM porque hay oferta local.",
+    };
+    expect(status()).toBe("cumple");
+  });
+
+  it("señala resultados que describen entregas y respeta los que expresan cambio", () => {
+    expect(
+      outcomesThatLookLikeOutputs([
+        "120 kits entregados a las instituciones",
+        "Los docentes aplican la metodología en sus talleres de aula",
+      ]),
+    ).toEqual(["120 kits entregados a las instituciones"]);
+  });
+
+  it("evalúa SMART por criterio, sin puntaje, y solo exige a los indicadores definitivos", async () => {
+    const analysis = await buildDemoAnalysis();
+    const indicator = analysis.indicators.find((item) => item.projectEvidence.length > 0)!;
+    expect(assessSmart(indicator, analysis.causal).failed).toEqual([]);
+    const broken = { ...indicator, formula: "", responsible: "" };
+    expect(assessSmart(broken, analysis.causal).failed).toEqual(["M", "A"]);
+
+    const rules = defaultRules();
+    indicator.formula = "";
+    const proposed = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, rules);
+    expect(proposed.checks.find((check) => check.id === "smart")?.status).toBe("cumple");
+    indicator.decision = "aprobado";
+    const accepted = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, rules);
+    expect(accepted.checks.find((check) => check.id === "smart")?.status).toBe("revisar");
+    expect(accepted.issues.find((issue) => issue.area === "SMART")?.severity).toBe("critico");
+  });
+});
+
+describe("reglas contextuales tras la revisión del inventario", () => {
+  it("juzga el marco por los indicadores seleccionados, no por las propuestas pendientes", async () => {
+    const analysis = await buildDemoAnalysis();
+    const coverage = () =>
+      reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, defaultRules()).checks.find(
+        (check) => check.id === "cobertura",
+      )?.status;
+    expect(coverage()).toBe("cumple");
+    analysis.indicators[0]!.decision = "aprobado";
+    expect(coverage()).toBe("revisar");
+  });
+
+  it("no exige indicadores ni supuestos de impacto cuando la teoría de cambio no lo define", async () => {
+    const analysis = await buildDemoAnalysis();
+    analysis.causal.impact = "";
+    analysis.causal.linkAssumptions = { actividad_producto: "Si A, entonces B porque C.", producto_resultado: "Si B, entonces D porque E.", resultado_impacto: "" };
+    const withoutImpact = analysis.indicators.filter((indicator) => indicator.level !== "impacto");
+    const review = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, withoutImpact, defaultRules());
+    expect(review.checks.find((check) => check.id === "cobertura")?.status).toBe("cumple");
+    expect(review.checks.find((check) => check.id === "supuestosEnlace")?.status).toBe("cumple");
+    const orphan = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, defaultRules());
+    expect(orphan.issues.some((issue) => issue.message.includes("no define un impacto"))).toBe(true);
+  });
+
+  it("la regla de atribución exige factores externos cuando hay indicadores de impacto", async () => {
+    const analysis = await buildDemoAnalysis();
+    analysis.causal.externalFactors = [];
+    const review = reviewLogicalFramework(DEMO_PROJECT, analysis.causal, analysis.indicators, defaultRules());
+    expect(review.checks.find((check) => check.id === "atribucion")?.status).toBe("revisar");
+  });
+
+  it("SMART no aprueba por inercia: relleno, carga sin recursos e indicadores ajenos al proyecto fallan", async () => {
+    const analysis = await buildDemoAnalysis();
+    const base = analysis.indicators.find((item) => item.projectEvidence.length > 0)!;
+    expect(assessSmart({ ...base, formula: "Por definir" }, analysis.causal).failed).toEqual(["M"]);
+    expect(assessSmart({ ...base, measurementBurden: "alta" }, { ...analysis.causal, resources: [] }).failed).toEqual(["A"]);
+    expect(assessSmart({ ...base, measurementBurden: "alta" }, { ...analysis.causal, resources: ["Equipo MEL de dos personas"] }).failed).toEqual([]);
+    const foreign = { ...base, decision: "modificado" as const, projectEvidence: [], name: "Toneladas de pescado exportadas", observedChange: "Aumentan las exportaciones pesqueras." };
+    expect(assessSmart(foreign, analysis.causal).failed).toEqual(["R"]);
+  });
+
+  it("las metas de rango y las estables no eluden la validación", async () => {
+    const analysis = await buildDemoAnalysis();
+    const indicator = analysis.indicators[0]!;
+    indicator.target = { ...emptyTarget(), lowerBound: 40, upperBound: 60 };
+    expect(evaluateTarget(indicator).incompatibilities).toContain("La meta no tiene fecha; sin plazo no es verificable.");
+    indicator.orientation = "estable";
+    indicator.target = { ...emptyTarget(), value: 90, baselineValue: 50 };
+    expect(directionIssues(indicator)).toHaveLength(1);
+    indicator.target = { ...emptyTarget(), value: 50, baselineValue: 50 };
+    expect(directionIssues(indicator)).toHaveLength(0);
+  });
+});
+
+describe("plantilla e importación de mediciones desde Excel", () => {
+  async function setup() {
+    const analysis = await buildDemoAnalysis();
+    const [a, b] = analysis.indicators;
+    Object.assign(a!, { decision: "aprobado", institutionalCode: "PA-001" });
+    Object.assign(b!, { decision: "aprobado", institutionalCode: "PA-002" });
+    const workbook = buildWorkbook(DEMO_PROJECT, analysis, defaultSettings());
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[REPORT_TEMPLATE_SHEET]!, { header: 1, defval: null }) as unknown[][];
+    const run = (edited: unknown[][]) =>
+      importMeasurements({ rows: edited, indicators: analysis.indicators, periodId: "2026-T2", enteredBy: "ana", now: "2026-07-01T10:00:00Z" });
+    return { rows, run, a: a!, b: b! };
+  }
+  const VALUE = 5;
+  const ZERO = 6;
+  const REASON = 7;
+
+  it("hace el viaje completo: la plantilla exportada vuelve diligenciada y produce los valores", async () => {
+    const { rows, run, a, b } = await setup();
+    expect(rows).toHaveLength(3);
+    rows[1]![VALUE] = 42;
+    rows[2]![VALUE] = "17,5";
+    const result = run(rows);
+    expect(result.ok).toBe(true);
+    expect(result.values.map((value) => [value.indicatorId, value.value])).toEqual([[a.id, 42], [b.id, 17.5]]);
+
+    const bytes = XLSX.write({ SheetNames: [REPORT_TEMPLATE_SHEET], Sheets: { [REPORT_TEMPLATE_SHEET]: XLSX.utils.aoa_to_sheet(rows) } }, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+    expect(run(readWorkbookRows(bytes)).values).toHaveLength(2);
+  });
+
+  it("no convierte vacíos en cero ni acepta ceros sin confirmar", async () => {
+    const { rows, run } = await setup();
+    rows[1]![VALUE] = 0;
+    rows[2]![VALUE] = null;
+    const rejected = run(rows);
+    expect(rejected.ok).toBe(false);
+    expect(rejected.values).toEqual([]);
+    expect(rejected.issues.filter((issue) => issue.severity === "error").map((issue) => issue.row)).toEqual([2, 3]);
+
+    rows[1]![ZERO] = "sí";
+    rows[2]![REASON] = "La encuesta se aplica en el siguiente trimestre";
+    const accepted = run(rows);
+    expect(accepted.ok).toBe(true);
+    expect(accepted.values[0]).toMatchObject({ value: 0, explicitZero: true });
+    expect(accepted.values[1]).toMatchObject({ value: null, explicitZero: false, notMeasuredReason: "La encuesta se aplica en el siguiente trimestre" });
+  });
+
+  it("rechaza códigos duplicados, desconocidos, de otro periodo y valores no numéricos, indicando la fila", async () => {
+    const { rows, run } = await setup();
+    rows[1]![VALUE] = 10;
+    rows[2]![VALUE] = "muchos";
+    rows.push(["PA-001", null, null, null, null, 80, null, null, null, null]);
+    rows.push(["ZZ-999", null, null, null, null, 5, null, null, null, null]);
+    rows.push(["PA-002", null, null, null, "2026-T1", 5, null, null, null, null]);
+    const result = run(rows);
+    expect(result.ok).toBe(false);
+    const messages = result.issues.map((issue) => `${issue.row}:${issue.message}`).join("\n");
+    expect(messages).toContain("3:El valor \"muchos\" no es un número.");
+    expect(messages).toContain("4:El código PA-001 ya aparece en la fila 2");
+    expect(messages).toContain("5:El código ZZ-999 no corresponde");
+    expect(messages).toContain("6:El código PA-002 ya aparece en la fila 3");
+  });
+
+  it("avisa de indicadores sin código o sin fila y exige las columnas mínimas", async () => {
+    const { rows, run } = await setup();
+    rows[1]![VALUE] = 10;
+    const partial = run(rows.slice(0, 2));
+    expect(partial.ok).toBe(true);
+    expect(partial.issues.some((issue) => issue.severity === "aviso" && issue.message.includes("PA-002"))).toBe(true);
+    expect(run([["Indicador", "Valor"]]).issues[0]?.message).toContain("Código de la fundación");
   });
 });
