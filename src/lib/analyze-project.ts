@@ -67,9 +67,9 @@ function evidenceFor(allSentences: string[], terms: string[], limit = 2): string
 
 function displayKeyword(term: string): string {
   const replacements: Record<string, string> = {
-    ninas: "niñas y niños",
+    ninas: "niñas",
     ninos: "niñas y niños",
-    "niñas": "niñas y niños",
+    "niñas": "niñas",
     "niños": "niñas y niños",
     jovenes: "jóvenes",
     inclusion: "inclusión",
@@ -317,7 +317,44 @@ function selectTemplates(text: string, sectors: DetectedSector[]): IndicatorTemp
     if (alreadySelected(candidate.template) || candidate.template.tier === "esencial") continue;
     optional.push(candidate.template);
   }
-  return [...selected.slice(0, ESSENTIAL_LIMIT), ...optional];
+  const prioritized: IndicatorTemplate[] = [];
+  if (hasAny(normalizedText, ["mujeres", "niñas", "genero"])) {
+    const participation = INDICATOR_LIBRARY.find((item) => item.id === "g_participation")!;
+    prioritized.push({
+      ...participation,
+      id: "gender_participation",
+      name: "Porcentaje de mujeres y niñas entre las personas participantes",
+      keywords: ["mujeres", "niñas", "género"],
+      unit: "Porcentaje",
+      numerator: "Mujeres y niñas participantes únicas en el periodo",
+      denominator: "Total de personas participantes únicas en el mismo periodo",
+      formula: "(Mujeres y niñas participantes únicas / total de participantes únicos) × 100",
+      observedChange: "Se identifica la participación de mujeres y niñas para revisar brechas de acceso; la asistencia por sí sola no demuestra igualdad de género.",
+      disaggregations: ["Sexo", "Edad: niñas y mujeres adultas", "Territorio"],
+      ods: ["5.1"],
+      tier: "esencial",
+    });
+    if (hasAny(normalizedText, ["liderazgo", "toma de decisiones", "decisorios"])) {
+      prioritized.push({
+        ...participation,
+        id: "gender_leadership",
+        name: "Porcentaje de cargos de decisión ocupados por mujeres",
+        keywords: ["mujeres", "liderazgo", "toma de decisiones"],
+        level: "resultado",
+        unit: "Porcentaje",
+        numerator: "Cargos de decisión ocupados por mujeres",
+        denominator: "Total de cargos de decisión del espacio observado",
+        formula: "(Cargos de decisión ocupados por mujeres / total de cargos de decisión) × 100",
+        observedChange: "Las mujeres acceden a espacios de decisión y liderazgo; verificar también su participación efectiva.",
+        instrument: "Registro de composición y actas del espacio de decisión",
+        source: "Actas y registros del espacio de decisión",
+        disaggregations: ["Edad", "Tipo de cargo", "Territorio"],
+        ods: ["5.5"],
+        tier: "esencial",
+      });
+    }
+  }
+  return [...prioritized, ...selected.slice(0, ESSENTIAL_LIMIT), ...optional].slice(0, ESSENTIAL_LIMIT + OPTIONAL_LIMIT);
 }
 
 /**
@@ -414,17 +451,22 @@ function makeIndicator(
   target.targetTerritory = project.territory;
   target.baselineReference = `REQUIERE LÍNEA BASE: ${template.baseline.method}`;
   target.determinationMethod = "pendiente";
-  const odsAlignments = template.ods.slice(0, 3).flatMap((code, index) => {
+  // La meta debe corresponder al indicador concretado, no a la plantilla genérica.
+  const concreteTargets = waterProject && !hasAny(projectText, ["robotica", "stem"])
+    ? ({ g_deliverables: ["6.1"], g_sustainability: ["6.1"], learning_gain: ["12.8"],
+        learning_application: ["6.4"], env_practices: ["6.4"] } as Record<string, string[]>)[template.id]
+    : undefined;
+  const odsAlignments = (concreteTargets ?? template.ods).slice(0, 3).flatMap((code, index) => {
     const alignment = buildAlignment(code, index === 0 ? "principal" : "secundaria");
     if (!alignment) return [];
     return [
       {
         ...alignment,
-        contributionType: index === 0 ? ("directa" as const) : ("indirecta" as const),
-        causalRationale: `${template.observedChange} La relación se propone por el mecanismo de cambio descrito y debe confirmarse contra el objetivo específico del proyecto.`,
+        contributionType: index === 0 && template.id !== "gender_participation" ? ("directa" as const) : ("indirecta" as const),
+        causalRationale: `${concrete.observedChange} La relación se propone por el mecanismo de cambio descrito y debe confirmarse contra el objetivo específico del proyecto.`,
         compatibilityAssessment:
           "El indicador recomendado opera a escala de proyecto. No sustituye el indicador global ODS ni permite atribuir el avance nacional al proyecto.",
-        localProxy: template.name,
+        localProxy: concrete.name,
         reviewStatus: "sugerida" as const,
       },
     ];

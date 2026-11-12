@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { ExecutionMonitor } from "@/components/ExecutionMonitor";
+import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 import { DEMO_PROJECT, buildDemoAnalysis } from "@/data/demo-project";
 import { ODS_SOURCE } from "@/data/ods-catalog";
 import { analyzeProject } from "@/lib/analyze-project";
@@ -98,13 +99,16 @@ function MedidorApp() {
             Monitorear proyectos en ejecución
           </button>
           <button role="tab" aria-selected={mode === "design"} onClick={() => setMode("design")} className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${mode === "design" ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:border-primary/40"}`}>
-            Diseñar indicadores para un proyecto nuevo
+            Medir y sugerir indicadores con Excel
           </button>
         </div>
         {mode === "monitor" ? (
           <ExecutionMonitor />
         ) : (
           <>
+            <ProjectWorkspace />
+            <details className="mt-6">
+            <summary className="cursor-pointer rounded-lg border bg-card p-4 text-sm font-medium">Opcional: diseñar desde documentos o editar fichas y marco lógico</summary>
             <Stepper current={step} onSelect={(next) => (next <= 2 || analysis ? setStep(next) : undefined)} />
             <div className="mt-6">
               {step === 1 && <FrameworksStep />}
@@ -114,6 +118,7 @@ function MedidorApp() {
               {step === 5 && analysis && <OdsBaselineStep />}
               {step === 6 && analysis && <LogicalFrameworkStep />}
             </div>
+            </details>
           </>
         )}
       </main>
@@ -331,7 +336,7 @@ function ProjectStep() {
     <div className="grid gap-5 lg:grid-cols-[1fr_350px]">
       <Panel
         title="Carga el proyecto"
-        description="Puedes seleccionar varios PDF, DOCX o TXT. El sistema recomendará entre 10 y 15 indicadores concretos para este proyecto."
+        description="Puedes seleccionar Excel, CSV, PDF, DOCX o TXT. Para un consolidado de ejecución usa la carga de Excel de arriba y elige un proyecto."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           {([
@@ -356,7 +361,7 @@ function ProjectStep() {
           <label className={buttonSecondary}>
             <FileText className="size-4" />
             {busy ? "Procesando…" : "Cargar varios documentos"}
-            <input className="sr-only" type="file" multiple accept=".pdf,.docx,.txt,.md,text/plain,application/pdf" onChange={(event) => loadFiles(event.target.files)} />
+            <input className="sr-only" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.pdf,.docx,.txt,.md,text/plain,application/pdf" onChange={(event) => loadFiles(event.target.files)} />
           </label>
           {project.sourceFileNames.length > 0 && (
             <button

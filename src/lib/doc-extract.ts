@@ -20,6 +20,31 @@ export async function extractTextFromFile(file: File): Promise<string> {
   }
   const ext = extensionOf(file.name);
 
+  if (["xlsx", "xls", "xlsm", "csv"].includes(ext)) {
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const lines: string[] = [];
+    for (const name of workbook.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name]!, {
+        header: 1, defval: null, blankrows: true,
+      });
+      lines.push(`Hoja: ${name}`);
+      rows.forEach((row, index) => {
+        const cells = row.flatMap((value, column) => value === null || value === "" ? [] :
+          [`${XLSX.utils.encode_col(column)}: ${String(value)}`]);
+        if (cells.length) lines.push(`Fila ${index + 1} | ${cells.join(" | ")}`);
+      });
+    }
+    if (!lines.some((line) => line.startsWith("Fila "))) {
+      throw new ExtractionError("El Excel no contiene celdas con datos. Revisa las hojas del archivo.");
+    }
+    const text = lines.join("\n");
+    if (text.length > MAX_TEXT_CHARS) {
+      throw new ExtractionError("El Excel supera el límite de lectura. Carga un archivo con las hojas del proyecto que quieres analizar.");
+    }
+    return text;
+  }
+
   if (ext === "txt" || ext === "md" || file.type === "text/plain") {
     return truncate(await file.text());
   }
@@ -63,7 +88,7 @@ export async function extractTextFromFile(file: File): Promise<string> {
   }
 
   throw new ExtractionError(
-    `No se puede leer un archivo .${ext || "sin extensión"}. Formatos admitidos: PDF, DOCX y TXT.`,
+    `No se puede leer un archivo .${ext || "sin extensión"}. Formatos admitidos: Excel, CSV, PDF, DOCX y TXT.`,
   );
 }
 

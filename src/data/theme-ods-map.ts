@@ -13,6 +13,8 @@ export interface ThemeRule {
 }
 
 export const THEME_RULES: ThemeRule[] = [
+  { theme: "igualdad de género y acceso de mujeres y niñas (revisar barreras y discriminación)", keywords: ["mujeres", "niñas", "ninas", "igualdad de genero", "equidad de genero"], targetCode: "5.1" },
+  { theme: "liderazgo y participación de mujeres en decisiones", keywords: ["liderazgo de mujeres", "liderazgo femenino", "mujeres en la toma de decisiones"], targetCode: "5.5" },
   { theme: "educación y sensibilización ambiental", keywords: ["educacion ambiental", "sensibilizacion", "concientizacion", "talleres pedagogicos", "talleres ambientales", "acciones pedagogicas", "procesos formativos", "educacion a clientes"], targetCode: "12.8" },
   { theme: "educación para el desarrollo sostenible", keywords: ["instituciones educativas", "estudiantes", "docentes", "diplomado", "capacitaciones"], targetCode: "4.7" },
   { theme: "acceso a agua potable", keywords: ["agua potable", "potabilizacion", "solucion de pot", "acueducto"], targetCode: "6.1" },

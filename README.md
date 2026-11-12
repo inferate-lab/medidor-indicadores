@@ -109,3 +109,11 @@ El Site original no se modifica y esta copia no contiene su configuración de pu
 - `.github/workflows/pages.yml` la compila y la publica cada vez que se fusiona en `main` (o manualmente desde la pestaña Actions). Antes de publicar ejecuta las pruebas.
 - GitHub Pages exige que el repositorio sea público o que la cuenta tenga un plan de pago.
 - El sitio publicado es público: cualquiera con la dirección puede abrirlo. Los archivos que se cargan no salen del navegador de quien los usa.
+
+## Cartera, mediciones y cooperación
+
+En **Medir y sugerir indicadores con Excel**, carga el consolidado, indica la vigencia de los planes y crea el seguimiento de todos sus proyectos. Cada ficha permite incorporar sugerencias o agregar indicadores propios, registrar mediciones mensuales con evidencia y conservar las correcciones. La revisión por periodo muestra dónde faltan datos.
+
+**Cooperación y réplica** documenta las condiciones para adaptar el proyecto y descarga una ficha con resultados registrados y pendientes. Es una revisión interna, no una evaluación de elegibilidad frente a un donante.
+
+La cartera se guarda en este navegador. Descarga un respaldo JSON para conservarla o moverla a otro equipo; también puedes descargar una plantilla e importar mediciones desde Excel. Esta etapa funciona para una persona, sin sincronización entre usuarios. Detalles y validación en `docs/REPORTE_FASE_SEGUIMIENTO_COOPERACION.md`.
