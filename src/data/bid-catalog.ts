@@ -100,3 +100,41 @@ export function bidReferencesForIndicator(templateId: string, sectors: SectorKey
     (reference) => codes.includes(reference.code) && reference.sectors.some((sector) => active.has(sector)),
   );
 }
+
+/** Catálogo de indicadores de Datos Abiertos del BID, consultado el 11 de noviembre de 2026. */
+export const BID_INDICATOR_CATALOG_URL = "https://data.iadb.org/es/indicator-catalog";
+
+export interface BidCountryCategory {
+  /** Nombre exacto de la categoría en el catálogo del BID. */
+  category: string;
+  label: string;
+  sectors: SectorKey[];
+}
+
+/**
+ * Categorías de "Social Indicators of Latin America and the Caribbean". Son
+ * indicadores de país: sirven de contexto y comparación, no miden el proyecto.
+ */
+export const BID_COUNTRY_CATEGORIES: BidCountryCategory[] = [
+  { category: "Education", label: "Educación", sectors: ["lectura_educacion", "ciencia", "educacion_ambiental", "innovacion"] },
+  { category: "Poverty and inequality", label: "Pobreza y desigualdad", sectors: ["gestion_social"] },
+  { category: "Gender and diversity", label: "Género y diversidad", sectors: ["gestion_social", "gestion_cultural"] },
+  { category: "Housing", label: "Vivienda y servicios (agua, saneamiento, energía)", sectors: ["medio_ambiente", "soluciones_naturaleza"] },
+  { category: "Employment and social security", label: "Empleo y seguridad social", sectors: ["innovacion", "gestion_social"] },
+];
+
+export function bidCategoryUrl(category: string): string {
+  return `https://data.iadb.org/es/dataset/?type=indicator&vocab_indicator_categories=${encodeURIComponent(category).replace(/%20/g, "+")}`;
+}
+
+/** Referencias del BID pertinentes para los temas detectados en un proyecto. */
+export function bidReferencesForSectors(sectors: SectorKey[]): {
+  framework: BidReference[];
+  countryCategories: BidCountryCategory[];
+} {
+  const active = new Set(sectors);
+  return {
+    framework: BID_REFERENCES.filter((reference) => reference.sectors.some((sector) => active.has(sector))).slice(0, 4),
+    countryCategories: BID_COUNTRY_CATEGORIES.filter((item) => item.sectors.some((sector) => active.has(sector))).slice(0, 3),
+  };
+}

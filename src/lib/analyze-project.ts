@@ -332,7 +332,8 @@ type ConcreteIndicatorCopy = Pick<
 
 function concreteIndicatorCopy(template: IndicatorTemplate, project: ProjectInput): ConcreteIndicatorCopy {
   const text = normalized(`${project.name} ${project.sector} ${project.text}`);
-  const robotics = hasAny(text, ["robotica", "stem", "kit", "prototipo", "programacion"]);
+  // Solo se usa la redacción de robótica cuando el proyecto la nombra: "kit" o "programación" solos aparecen en muchos otros proyectos.
+  const robotics = hasAny(text, ["robotica", "stem"]);
   const water = hasAny(text, ["agua potable", "potabilizacion", "recurso hidrico", "acueducto"]);
   const original: ConcreteIndicatorCopy = {
     name: template.name,
