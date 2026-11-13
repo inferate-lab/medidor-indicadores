@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
-import { readExecutionWorkbook } from "@/lib/execution-import";
 import {
   buildSuggestionWorkbook,
   calculateProportion,
   designFromExecution,
 } from "@/lib/indicator-design";
-import { MAX_FILE_BYTES } from "@/lib/doc-extract";
 import { LEVEL_LABELS, type Indicator } from "@/types/medidor";
 import type { ExecutionProject, ExecutionWorkbook } from "@/types/execution";
 
@@ -18,7 +16,11 @@ export function ExcelIndicatorDesigner({
   onTrackProjects,
   onAdopt,
   incomingUpload,
+  onUpload,
+  uploadBusy,
 }: {
+  onUpload: (file: File) => Promise<void>;
+  uploadBusy: boolean;
   incomingUpload: { name: string; workbook: ExecutionWorkbook } | null;
   onTrackProjects: (projects: ExecutionProject[], year: number) => void;
   onAdopt: (projectId: string, indicator: Indicator) => void;
@@ -42,25 +44,6 @@ export function ExcelIndicatorDesigner({
       .getElementById("excel-project-import")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [incomingUpload]);
-  async function load(file?: File) {
-    if (!file) return;
-    setBusy(true);
-    setError("");
-    setResult(null);
-    setWorkbook(null);
-    setSelected("");
-    try {
-      if (file.size > MAX_FILE_BYTES) throw new Error("El límite es 12 MB por archivo.");
-      const parsed = readExecutionWorkbook(await file.arrayBuffer());
-      if (!parsed.projects.length) throw new Error(parsed.warnings.join(" "));
-      setWorkbook(parsed);
-      setFileName(file.name);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No se pudo leer el Excel.");
-    } finally {
-      setBusy(false);
-    }
-  }
   async function suggest() {
     const project = workbook?.projects.find((item) => item.id === selected);
     if (!project) return;
@@ -113,14 +96,15 @@ export function ExcelIndicatorDesigner({
           ODS declarados en la hoja Consolidado. Los resúmenes financieros no se suman otra vez.
         </p>
         <label className={`${button} mt-4 inline-block cursor-pointer`}>
-          {busy ? "Procesando…" : "Cargar Excel para sugerir indicadores"}
+          {busy || uploadBusy ? "Procesando…" : "Cargar Excel para sugerir indicadores"}
           <input
-            disabled={busy}
+            disabled={busy || uploadBusy}
             className="sr-only"
             type="file"
-            accept=".xlsx,.xlsm,.xls"
+            accept=".xlsx,.xlsm,.xls,.csv"
             onChange={(event) => {
-              void load(event.target.files?.[0]);
+              const file = event.target.files?.[0];
+              if (file) void onUpload(file);
               event.target.value = "";
             }}
           />

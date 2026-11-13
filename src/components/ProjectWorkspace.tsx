@@ -1,6 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import { ExcelIndicatorDesigner } from "@/components/ExcelIndicatorDesigner";
+import { OdsMeasurementPanel, LearningPanel, ProjectSuggestions } from "@/components/MelPanels";
+import { createMelProject, trackDesignedProject } from "@/lib/mel-workflow";
+import type { ProjectInput, SessionAnalysis } from "@/types/medidor";
 import { ALL_TARGETS } from "@/data/ods-catalog";
 import { LEVEL_LABELS, ORIENTATION_LABELS } from "@/types/medidor";
 import {
@@ -29,7 +32,7 @@ import {
   updateTrackingIndicator,
   validateTrackingIndicator,
 } from "@/lib/project-tracking";
-import { classifyWorkbookUpload } from "@/lib/workbook-upload";
+import { classifyWorkbookUpload, selectedSheetDescription } from "@/lib/workbook-upload";
 import type { ExecutionWorkbook } from "@/types/execution";
 import { sanitizeCell } from "@/lib/sanitize";
 
@@ -61,7 +64,26 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function ProjectWorkspace() {
+export function ProjectWorkspace({
+  incomingFile,
+  incomingDesign,
+  onReset,
+  onInputsHandled,
+}: {
+  incomingFile: File | null;
+  incomingDesign: { input: ProjectInput; analysis: SessionAnalysis } | null;
+  onReset: () => void;
+  onInputsHandled: () => void;
+}) {
+  const [newName, setNewName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [resetScope, setResetScope] = useState<"all" | "project" | null>(null);
+  const [backupBeforeReset, setBackupBeforeReset] = useState(true);
+  const [tables, setTables] = useState<{ name: string; grid: unknown[][] }[]>([]);
+  const [tableName, setTableName] = useState("");
+  const [tableNotice, setTableNotice] = useState("");
+  const [designerGeneration, setDesignerGeneration] = useState(0);
   const [portfolio, setPortfolio] = useState<Portfolio>(emptyPortfolio);
   const [ready, setReady] = useState(false);
   const [storageBlocked, setStorageBlocked] = useState(false);
@@ -108,6 +130,68 @@ export function ProjectWorkspace() {
       ...current,
       projects: current.projects.map((p) => (p.id === updated.id ? updated : p)),
     }));
+  useEffect(() => {
+    if (incomingFile) void importMeasurements(incomingFile).finally(onInputsHandled);
+  }, [incomingFile]);
+  useEffect(() => {
+    if (!incomingDesign) return;
+    try {
+      const added = trackDesignedProject(incomingDesign.input, incomingDesign.analysis);
+      setPortfolio(addTrackedProjects(portfolio, [added]));
+      setSelected(added.id);
+      setFocusIndicator("");
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      onInputsHandled();
+    }
+  }, [incomingDesign]);
+  function createNew() {
+    try {
+      const added = createMelProject(newName, newDescription);
+      setPortfolio(addTrackedProjects(portfolio, [added]));
+      setSelected(added.id);
+      setFocusIndicator("");
+      setShowNew(false);
+      setNewName("");
+      setNewDescription("");
+      setTables([]);
+      setError("");
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+  function clearData() {
+    try {
+      if (backupBeforeReset && portfolio.projects.length)
+        download(
+          serializePortfolio(portfolio),
+          "respaldo-antes-de-borrar.json",
+          "application/json",
+        );
+      const next =
+        resetScope === "all"
+          ? emptyPortfolio()
+          : { ...portfolio, projects: portfolio.projects.filter((p) => p.id !== selected) };
+      localStorage.setItem(PORTFOLIO_STORAGE_KEY, serializePortfolio(next));
+      setPortfolio(next);
+      setStorageBlocked(false);
+      setSelected("");
+      setFocusIndicator("");
+      setResetScope(null);
+      setProjectUpload(null);
+      setPendingRestore(null);
+      setTables([]);
+      setShowNew(false);
+      setNewName("");
+      setNewDescription("");
+      setError("");
+      setDesignerGeneration((current) => current + 1);
+      if (resetScope === "all") onReset();
+    } catch (cause) {
+      setError(`No se borraron los datos: ${errorMessage(cause)}`);
+    }
+  }
   async function restore(file?: File) {
     if (!file) return;
     setError("");
@@ -151,6 +235,14 @@ export function ProjectWorkspace() {
         setProjectUpload({ name: file.name, workbook: uploaded.workbook });
         return;
       }
+      if (uploaded.kind === "tables") {
+        setTables(uploaded.sheets);
+        setTableName("");
+        setTableNotice("");
+        setShowNew(true);
+        document.getElementById("crear-proyecto-mel")?.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
       if (!portfolio.projects.length)
         throw new Error(
           "Esta es una plantilla de mediciones. Primero carga el consolidado de proyectos y crea su seguimiento para vincular los valores.",
@@ -167,13 +259,140 @@ export function ProjectWorkspace() {
     <div className="space-y-6">
       <section className={panel}>
         <h2 className="text-xl font-semibold">Mi cartera de proyectos</h2>
+        <p className="mt-2 text-sm font-medium">
+          Crear proyecto → definir indicadores → medir → revisar ODS → aprender y ajustar.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className={primary} onClick={() => setShowNew(true)}>
+            Crear un proyecto nuevo
+          </button>
+          <button
+            className={button}
+            onClick={() => {
+              setResetScope("all");
+              setBackupBeforeReset(true);
+            }}
+          >
+            Empezar de cero
+          </button>
+          {project && (
+            <button
+              className={button}
+              onClick={() => {
+                setResetScope("project");
+                setBackupBeforeReset(true);
+              }}
+            >
+              Eliminar este proyecto
+            </button>
+          )}
+        </div>
+        {resetScope && (
+          <div
+            role="dialog"
+            aria-label="Confirmar borrado de datos"
+            className="mt-3 rounded-lg border border-red-300 p-4 text-sm"
+          >
+            <p className="font-semibold">
+              {resetScope === "all"
+                ? `Se borrará toda la cartera de este navegador (${portfolio.projects.length} proyectos), con sus mediciones y aprendizajes.`
+                : `Se eliminará ${project?.name} y su historial. Los otros proyectos se conservan.`}
+            </p>
+            <label className="mt-3 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={backupBeforeReset}
+                onChange={(event) => setBackupBeforeReset(event.target.checked)}
+              />
+              Descargar un respaldo antes de borrar
+            </label>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button className={button} onClick={clearData}>
+                Confirmar borrado
+              </button>
+              <button className={button} onClick={() => setResetScope(null)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+        {showNew && (
+          <div id="crear-proyecto-mel" className="mt-4 space-y-3 rounded-lg border p-4">
+            <h3 className="font-semibold">Proyecto nuevo, sin datos precargados</h3>
+            {tables.length > 0 && (
+              <>
+                <p className="text-sm">
+                  Este Excel tiene otro formato. Selecciona solo la hoja del proyecto que quieres
+                  describir; revisa el texto antes de crear la ficha.
+                </p>
+                <Field label="Hoja del Excel a interpretar">
+                  <select
+                    aria-label="Hoja del Excel a interpretar"
+                    className={input}
+                    value={tableName}
+                    onChange={(event) => {
+                      setTableName(event.target.value);
+                      const sheet = tables.find((t) => t.name === event.target.value);
+                      if (sheet) {
+                        const extracted = selectedSheetDescription(sheet);
+                        setNewDescription(extracted.text);
+                        setNewName(sheet.name);
+                        setTableNotice(
+                          extracted.truncated
+                            ? "La hoja es extensa. Se muestra una vista parcial identificada por filas: selecciona un bloque menor o completa y revisa la descripción antes de continuar."
+                            : "Se leyó solo la hoja seleccionada, conservando sus filas y columnas.",
+                        );
+                      }
+                    }}
+                  >
+                    <option value="">Selecciona una hoja</option>
+                    {tables.map((t) => (
+                      <option key={t.name} value={t.name}>
+                        {t.name} ({t.grid.length} filas)
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <p className="text-sm text-muted-foreground">{tableNotice}</p>
+              </>
+            )}
+            <Field label="Nombre del proyecto nuevo">
+              <input
+                maxLength={500}
+                className={input}
+                aria-label="Nombre del proyecto nuevo"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+              />
+            </Field>
+            <Field label="Descripción del proyecto nuevo">
+              <textarea
+                className={input}
+                rows={5}
+                aria-label="Descripción del proyecto nuevo"
+                value={newDescription}
+                onChange={(event) => setNewDescription(event.target.value)}
+                placeholder="Problema, población, actividades y cambios esperados"
+              />
+            </Field>
+            <button className={primary} onClick={createNew}>
+              Crear ficha MEL
+            </button>
+            <button className={`${button} ml-2`} onClick={() => setShowNew(false)}>
+              Cancelar creación
+            </button>
+          </div>
+        )}
         <p className="mt-2 text-sm text-muted-foreground">
           Seguimiento individual: cada proyecto conserva sus indicadores, mediciones por periodo y
           ficha de cooperación. Descarga un respaldo para abrirlo en otro equipo. Los datos de este
           navegador no se comparten con otras personas.
         </p>
         <p role="status" className="mt-2 text-sm">
-          {status}
+          {status}.{" "}
+          {portfolio.projects.length
+            ? "Se muestran los proyectos guardados previamente en este equipo; no son una cartera de ejemplo."
+            : "La cartera está vacía: crea un proyecto o carga tu Excel para comenzar."}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
@@ -212,7 +431,7 @@ export function ProjectWorkspace() {
             {uploadBusy ? "Leyendo Excel…" : "Cargar Excel de proyectos o mediciones"}
             <input
               type="file"
-              accept=".xlsx,.xlsm,.xls"
+              accept=".xlsx,.xlsm,.xls,.csv"
               disabled={uploadBusy}
               className="sr-only"
               onChange={(event) => {
@@ -298,6 +517,9 @@ export function ProjectWorkspace() {
         />
       )}
       <ExcelIndicatorDesigner
+        onUpload={importMeasurements}
+        uploadBusy={uploadBusy}
+        key={designerGeneration}
         incomingUpload={projectUpload}
         onTrackProjects={(projects, year) => {
           const newProjects = projects.filter(
@@ -313,6 +535,7 @@ export function ProjectWorkspace() {
               newProjects.map((p) => trackExecutionProject(p, year)),
             ),
           );
+          setFocusIndicator("");
           setSelected(newProjects[0]?.id ?? "");
         }}
         onAdopt={(projectId, indicator) => {
@@ -339,7 +562,7 @@ function ProjectFollowup({
   onChange: (project: TrackedProject) => void;
   initialIndicator: string;
 }) {
-  const [tab, setTab] = useState<"medicion" | "cooperacion">("medicion");
+  const [tab, setTab] = useState<"medicion" | "cooperacion" | "ods" | "learning">("medicion");
   const [selected, setSelected] = useState(initialIndicator || project.indicators[0]?.id || "");
   const [reviewPeriod, setReviewPeriod] = useState("");
   const indicator = project.indicators.find((i) => i.id === selected);
@@ -361,8 +584,20 @@ function ProjectFollowup({
           Cooperación y réplica
         </button>
       </div>
+      <div className="flex flex-wrap gap-2">
+        <button className={tab === "ods" ? primary : button} onClick={() => setTab("ods")}>
+          Medición ODS
+        </button>
+        <button
+          className={tab === "learning" ? primary : button}
+          onClick={() => setTab("learning")}
+        >
+          Evaluación y aprendizaje
+        </button>
+      </div>
       {tab === "medicion" ? (
         <>
+          <ProjectSuggestions project={project} onChange={onChange} />
           <Field label="Periodo a revisar (vacío: último registro de cada indicador)">
             <input
               className={input}
@@ -442,6 +677,16 @@ function ProjectFollowup({
             />
           )}
         </>
+      ) : tab === "ods" ? (
+        <OdsMeasurementPanel
+          project={project}
+          onMeasure={(id) => {
+            setSelected(id);
+            setTab("medicion");
+          }}
+        />
+      ) : tab === "learning" ? (
+        <LearningPanel project={project} onChange={onChange} />
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
@@ -610,6 +855,7 @@ function IndicatorFollowup({
               ["responsible", "Responsable"],
               ["baselineSource", "Fuente de la línea base"],
               ["targetSource", "Fundamento de la meta"],
+              ["odsRationale", "Justificación de la relación con las metas ODS"],
             ] as const
           ).map(([key, label]) => (
             <Field key={key} label={label}>

@@ -117,3 +117,11 @@ En **Medir y sugerir indicadores con Excel**, carga el consolidado, indica la vi
 **Cooperación y réplica** documenta las condiciones para adaptar el proyecto y descarga una ficha con resultados registrados y pendientes. Es una revisión interna, no una evaluación de elegibilidad frente a un donante.
 
 La cartera se guarda en este navegador. Descarga un respaldo JSON para conservarla o moverla a otro equipo; también puedes descargar una plantilla e importar mediciones desde Excel. Esta etapa funciona para una persona, sin sincronización entre usuarios. Detalles y validación en `docs/REPORTE_FASE_SEGUIMIENTO_COOPERACION.md`.
+
+## Ciclo MEL y proyectos desde cero
+
+La pantalla principal permite **Crear un proyecto nuevo**, sin datos de ejemplo. También puedes cargar un consolidado o elegir una hoja de otro Excel. Los archivos cargados desde el formulario documental se encaminan al mismo lector de proyectos, evitando la lectura de todo el libro como texto.
+
+Cada proyecto incluye **Medición ODS** (metas vinculadas a indicadores locales, valores y fuentes) y **Evaluación y aprendizaje** (hallazgos, decisiones, responsables, plazos y cierre con evidencia). Puedes **Eliminar este proyecto** o **Empezar de cero**, con confirmación y respaldo opcional. La cartera vacía persiste al recargar. La actualización conserva respaldos anteriores.
+
+Consulta el diagnóstico en `docs/ANALISIS_MEL_Y_USABILIDAD.md` y los alcances en `docs/REPORTE_CICLO_MEL.md`.

@@ -36,9 +36,19 @@ describe("entrada de Excel por contenido", () => {
       "measurements",
     );
   });
-  it("explica los formatos admitidos cuando no reconoce el archivo", () => {
-    expect(() =>
-      classifyWorkbookUpload(bytes([{ name: "Otra hoja", grid: [["Sin formato reconocido"]] }])),
-    ).toThrow("consolidado");
+  it("permite seleccionar hojas de proyectos con otros formatos", () => {
+    const upload = classifyWorkbookUpload(
+      bytes([
+        {
+          name: "Otro proyecto",
+          grid: [
+            ["Indicador", "Valor"],
+            ["Personas", 10],
+          ],
+        },
+      ]),
+    );
+    expect(upload.kind).toBe("tables");
+    if (upload.kind === "tables") expect(upload.sheets[0]?.name).toBe("Otro proyecto");
   });
 });

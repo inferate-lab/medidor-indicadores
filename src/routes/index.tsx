@@ -45,6 +45,8 @@ import {
   type Orientation,
   type RuleId,
   type SmartCriterion,
+  type ProjectInput,
+  type SessionAnalysis,
 } from "@/types/medidor";
 
 export const Route = createFileRoute("/")({ component: Index });
@@ -75,8 +77,13 @@ function Index() {
 }
 
 function MedidorApp() {
-  const { step, setStep, analysis } = useSession();
-  const [mode, setMode] = useState<"monitor" | "design">("monitor");
+  const { step, setStep, analysis, project, reset } = useSession();
+  const [mode, setMode] = useState<"monitor" | "design">("design");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [incomingFile, setIncomingFile] = useState<File | null>(null);
+  const [incomingDesign, setIncomingDesign] = useState<{ input: ProjectInput; analysis: SessionAnalysis } | null>(null);
+  const [monitorGeneration, setMonitorGeneration] = useState(0);
+  const routeExcel = (file: File) => { setIncomingFile(file); setAdvancedOpen(false); };
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b bg-primary text-primary-foreground">
@@ -99,20 +106,21 @@ function MedidorApp() {
             Monitorear proyectos en ejecución
           </button>
           <button role="tab" aria-selected={mode === "design"} onClick={() => setMode("design")} className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${mode === "design" ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:border-primary/40"}`}>
-            Medir y sugerir indicadores con Excel
+            Proyectos, indicadores y ciclo MEL
           </button>
         </div>
         {mode === "monitor" ? (
-          <ExecutionMonitor />
+          <ExecutionMonitor key={monitorGeneration} />
         ) : (
           <>
-            <ProjectWorkspace />
-            <details className="mt-6">
+            <ProjectWorkspace onInputsHandled={() => { setIncomingFile(null); setIncomingDesign(null); }} incomingFile={incomingFile} incomingDesign={incomingDesign} onReset={() => { reset(); setIncomingFile(null); setIncomingDesign(null); setAdvancedOpen(false); setMonitorGeneration((n) => n + 1); }} />
+            <details className="mt-6" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
             <summary className="cursor-pointer rounded-lg border bg-card p-4 text-sm font-medium">Opcional: diseñar desde documentos o editar fichas y marco lógico</summary>
+            {analysis && <button className={`${buttonPrimary} mt-3`} onClick={() => { setIncomingDesign({ input: project, analysis }); setAdvancedOpen(false); }}>Crear seguimiento MEL de este diseño</button>}
             <Stepper current={step} onSelect={(next) => (next <= 2 || analysis ? setStep(next) : undefined)} />
             <div className="mt-6">
               {step === 1 && <FrameworksStep />}
-              {step === 2 && <ProjectStep />}
+              {step === 2 && <ProjectStep onExcelFile={routeExcel} />}
               {step === 3 && analysis && <UnderstandingStep />}
               {step === 4 && analysis && <IndicatorsStep />}
               {step === 5 && analysis && <OdsBaselineStep />}
@@ -282,7 +290,7 @@ function FrameworksStep() {
   );
 }
 
-function ProjectStep() {
+function ProjectStep({ onExcelFile }: { onExcelFile: (file: File) => void }) {
   const { project, setProject, setAnalysis, setStep, settings } = useSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -296,6 +304,12 @@ function ProjectStep() {
     setBusy(true);
     try {
       const selected = Array.from(files);
+      const spreadsheet = selected.find((file) => /\.(xlsx|xlsm|xls|csv)$/i.test(file.name));
+      if (spreadsheet) {
+        if (selected.length > 1) throw new Error("Carga un Excel a la vez para elegir sus proyectos u hojas sin mezclar la información.");
+        onExcelFile(spreadsheet);
+        return;
+      }
       const extracted = await Promise.all(selected.map(async (file) => ({ name: file.name, text: await extractTextFromFile(file) })));
       setProject((previous) => ({
         ...previous,
@@ -336,7 +350,7 @@ function ProjectStep() {
     <div className="grid gap-5 lg:grid-cols-[1fr_350px]">
       <Panel
         title="Carga el proyecto"
-        description="Puedes seleccionar Excel, CSV, PDF, DOCX o TXT. Para un consolidado de ejecución usa la carga de Excel de arriba y elige un proyecto."
+        description="PDF, DOCX o TXT se leen como documentos. Los Excel y CSV se abren en el lector de proyectos y hojas, para evitar mezclar todo el libro."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           {([
@@ -361,7 +375,7 @@ function ProjectStep() {
           <label className={buttonSecondary}>
             <FileText className="size-4" />
             {busy ? "Procesando…" : "Cargar varios documentos"}
-            <input className="sr-only" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.pdf,.docx,.txt,.md,text/plain,application/pdf" onChange={(event) => loadFiles(event.target.files)} />
+            <input className="sr-only" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.pdf,.docx,.txt,.md,text/plain,application/pdf" onChange={(event) => { void loadFiles(event.target.files); event.target.value = ""; }} />
           </label>
           {project.sourceFileNames.length > 0 && (
             <button
@@ -385,7 +399,7 @@ function ProjectStep() {
             Sugerir indicadores
           </button>
           <button className={buttonSecondary} disabled={busy} onClick={() => runAnalysis(true)}>
-            <FlaskConical className="size-4" /> Probar con robótica
+            <FlaskConical className="size-4" /> Ejemplo ficticio de robótica
           </button>
         </div>
       </Panel>

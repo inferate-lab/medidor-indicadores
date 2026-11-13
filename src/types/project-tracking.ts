@@ -27,6 +27,7 @@ export const trackingIndicatorSchema = z.object({
   lower: number,
   upper: number,
   ods: z.array(z.string().max(10)).max(3),
+  odsRationale: text.default(""),
   origin: z.enum(["excel", "sugerido", "propio"]),
 });
 export const observationSchema = z
@@ -66,14 +67,38 @@ export const cooperationSchema = z.object({
   sustainability: text,
   risks: text,
 });
+export const learningEntrySchema = z
+  .object({
+    id,
+    indicatorId: id,
+    period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+    observationRevision: z.number().int().positive().default(1),
+    finding: z.string().trim().min(1).max(12000),
+    decision: z.string().trim().min(1).max(12000),
+    responsible: z.string().trim().min(1).max(500),
+    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    status: z.enum(["abierta", "cerrada"]),
+    review: text,
+    recordedAt: z.string().datetime(),
+  })
+  .superRefine((entry, ctx) => {
+    if (entry.status === "cerrada" && !entry.review.trim())
+      ctx.addIssue({
+        code: "custom",
+        message: "Documenta el resultado de la acción antes de cerrarla.",
+      });
+  });
+export type LearningEntry = z.infer<typeof learningEntrySchema>;
 export const trackedProjectSchema = z.object({
   id,
   name: z.string().min(1).max(500),
   sheet: text,
-  description: text,
+  description: z.string().max(120000),
   indicators: z.array(trackingIndicatorSchema).max(200),
   observations: z.array(observationSchema).max(24000),
   cooperation: cooperationSchema,
+  declaredGoals: z.array(z.number().int().min(1).max(17)).default([]),
+  learning: z.array(learningEntrySchema).max(2000).default([]),
 });
 export const portfolioSchema = z
   .object({
@@ -99,6 +124,21 @@ export const portfolioSchema = z
             message: "Hay códigos de indicador duplicados en un proyecto.",
           });
         if (code) codes.add(code);
+      }
+      for (const entry of project.learning) {
+        if (
+          !indicators.has(entry.indicatorId) ||
+          !project.observations.some(
+            (o) =>
+              o.indicatorId === entry.indicatorId &&
+              o.period === entry.period &&
+              o.revision === entry.observationRevision,
+          )
+        )
+          ctx.addIssue({
+            code: "custom",
+            message: "El aprendizaje debe vincularse a un indicador y periodo registrados.",
+          });
       }
       const revisions = new Set<string>();
       for (const observation of project.observations) {

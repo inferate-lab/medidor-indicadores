@@ -4,7 +4,9 @@ import { MEASUREMENT_HEADERS } from "@/lib/project-tracking";
 import type { ExecutionWorkbook } from "@/types/execution";
 
 export type WorkbookUpload =
-  { kind: "measurements"; rows: unknown[][] } | { kind: "projects"; workbook: ExecutionWorkbook };
+  | { kind: "measurements"; rows: unknown[][] }
+  | { kind: "projects"; workbook: ExecutionWorkbook }
+  | { kind: "tables"; sheets: { name: string; grid: unknown[][] }[] };
 
 /** Clasifica por estructura; no exige la hoja Mediciones a un consolidado de proyectos. */
 export function classifyWorkbookUpload(data: ArrayBuffer): WorkbookUpload {
@@ -24,7 +26,28 @@ export function classifyWorkbookUpload(data: ArrayBuffer): WorkbookUpload {
   if (execution.projects.length) return { kind: "projects", workbook: execution };
   // Una plantilla incompleta conserva sus errores de validación de columnas.
   if (measurements) return { kind: "measurements", rows: measurements.grid };
-  throw new Error(
-    "No se reconoció el formato del Excel. Puedes cargar un consolidado con Alcance, Actividad y meses con Meta / Resultado, o la plantilla de mediciones descargada de esta cartera.",
+  const nonempty = sheets.filter((sheet) =>
+    sheet.grid.some((row) => row.some((cell) => cell !== null && String(cell).trim() !== "")),
   );
+  if (!nonempty.length) throw new Error("El Excel no contiene celdas con datos.");
+  return { kind: "tables", sheets: nonempty };
+}
+
+export function selectedSheetDescription(
+  sheet: { name: string; grid: unknown[][] },
+  limit = 60000,
+): { text: string; truncated: boolean } {
+  let text = `Hoja: ${sheet.name}\n`;
+  for (let row = 0; row < sheet.grid.length; row++) {
+    const cells = sheet.grid[row]!.flatMap((value, column) =>
+      value === null || String(value).trim() === ""
+        ? []
+        : [`${XLSX.utils.encode_col(column)}: ${String(value)}`],
+    );
+    if (!cells.length) continue;
+    const line = `Fila ${row + 1} | ${cells.join(" | ")}\n`;
+    if (text.length + line.length > limit) return { text, truncated: true };
+    text += line;
+  }
+  return { text, truncated: false };
 }

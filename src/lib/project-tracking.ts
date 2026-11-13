@@ -51,6 +51,7 @@ export function blankIndicator(id: string = crypto.randomUUID()): TrackingIndica
     lower: null,
     upper: null,
     ods: [],
+    odsRationale: "",
     origin: "propio",
   };
 }
@@ -68,6 +69,7 @@ export function adoptIndicator(indicator: Indicator): TrackingIndicator {
     frequency: indicator.frequency,
     responsible: "",
     ods: indicator.odsAlignments.map((a) => a.targetCode),
+    odsRationale: indicator.odsAlignments.map((a) => a.causalRationale).join("\n"),
     origin: "sugerido",
   };
 }
@@ -139,10 +141,20 @@ export function trackExecutionProject(
     id: project.id,
     name: project.name,
     sheet: project.sheet,
-    description: [project.purpose, project.objective].filter(Boolean).join("\n"),
+    description: [
+      project.purpose,
+      project.objective,
+      ...project.scopes.map((scope) => scope.name),
+      ...project.activities.filter((a) => a.note !== "suprimida").map((a) => a.name),
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .slice(0, 120000),
     indicators,
     observations,
     cooperation: emptyCooperation(),
+    declaredGoals: project.declaredGoals,
+    learning: [],
   };
 }
 export function addTrackedProjects(portfolio: Portfolio, projects: TrackedProject[]): Portfolio {
@@ -440,6 +452,15 @@ export function cooperationBrief(project: TrackedProject): string {
     ["Costos y financiación", profile.costs],
     ["Continuidad", profile.sustainability],
     ["Riesgos y salvaguardas", profile.risks],
+    [
+      "Evaluación, decisiones y aprendizaje",
+      project.learning
+        .map(
+          (entry) =>
+            `${entry.period} · ${project.indicators.find((i) => i.id === entry.indicatorId)?.name} · revisión ${entry.observationRevision}. Hallazgo: ${entry.finding}. Decisión: ${entry.decision}. Responsable: ${entry.responsible}. Revisar: ${entry.dueDate}. Estado: ${entry.status}. Resultado de la acción: ${entry.review || "Pendiente"}.`,
+        )
+        .join("\n\n"),
+    ],
   ];
   const indicators = project.indicators.map((indicator) => {
     const latest = latestObservations(project, indicator.id).at(-1);
