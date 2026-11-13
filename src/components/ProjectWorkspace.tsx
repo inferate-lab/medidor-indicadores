@@ -29,6 +29,8 @@ import {
   updateTrackingIndicator,
   validateTrackingIndicator,
 } from "@/lib/project-tracking";
+import { classifyWorkbookUpload } from "@/lib/workbook-upload";
+import type { ExecutionWorkbook } from "@/types/execution";
 import { sanitizeCell } from "@/lib/sanitize";
 
 const panel = "rounded-xl border bg-card p-5 shadow-sm";
@@ -68,6 +70,11 @@ export function ProjectWorkspace() {
   const [status, setStatus] = useState("");
   const [pendingRestore, setPendingRestore] = useState<Portfolio | null>(null);
   const [error, setError] = useState("");
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [projectUpload, setProjectUpload] = useState<{
+    name: string;
+    workbook: ExecutionWorkbook;
+  } | null>(null);
   useEffect(() => {
     try {
       const saved = localStorage.getItem(PORTFOLIO_STORAGE_KEY);
@@ -136,16 +143,23 @@ export function ProjectWorkspace() {
   async function importMeasurements(file?: File) {
     if (!file) return;
     setError("");
+    setUploadBusy(true);
     try {
       if (file.size > 12 * 1024 * 1024) throw new Error("El Excel supera 12 MB.");
-      const workbook = XLSX.read(await file.arrayBuffer());
-      const sheet = workbook.Sheets["Mediciones"];
-      if (!sheet) throw new Error("Falta la hoja Mediciones de la plantilla.");
-      setPortfolio(
-        importTrackingRows(portfolio, XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null })),
-      );
+      const uploaded = classifyWorkbookUpload(await file.arrayBuffer());
+      if (uploaded.kind === "projects") {
+        setProjectUpload({ name: file.name, workbook: uploaded.workbook });
+        return;
+      }
+      if (!portfolio.projects.length)
+        throw new Error(
+          "Esta es una plantilla de mediciones. Primero carga el consolidado de proyectos y crea su seguimiento para vincular los valores.",
+        );
+      setPortfolio(importTrackingRows(portfolio, uploaded.rows));
     } catch (cause) {
       setError(errorMessage(cause));
+    } finally {
+      setUploadBusy(false);
     }
   }
   if (!ready) return <p role="status">Abriendo la cartera de proyectos…</p>;
@@ -195,10 +209,11 @@ export function ProjectWorkspace() {
             Descargar plantilla de mediciones
           </button>
           <label className={`${button} cursor-pointer`}>
-            Importar mediciones Excel
+            {uploadBusy ? "Leyendo Excel…" : "Cargar Excel de proyectos o mediciones"}
             <input
               type="file"
-              accept=".xlsx"
+              accept=".xlsx,.xlsm,.xls"
+              disabled={uploadBusy}
               className="sr-only"
               onChange={(event) => {
                 void importMeasurements(event.target.files?.[0]);
@@ -269,7 +284,8 @@ export function ProjectWorkspace() {
         </div>
         {!portfolio.projects.length && (
           <p className="mt-4 text-sm">
-            Carga el consolidado en el apartado siguiente y crea el seguimiento de sus proyectos.
+            Empieza con “Cargar Excel de proyectos o mediciones”. Si es un consolidado, te pediremos
+            la vigencia para crear el seguimiento.
           </p>
         )}
       </section>
@@ -282,6 +298,7 @@ export function ProjectWorkspace() {
         />
       )}
       <ExcelIndicatorDesigner
+        incomingUpload={projectUpload}
         onTrackProjects={(projects, year) => {
           const newProjects = projects.filter(
             (p) => !portfolio.projects.some((own) => own.id === p.id),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { readExecutionWorkbook } from "@/lib/execution-import";
 import {
   buildSuggestionWorkbook,
@@ -17,7 +17,9 @@ type Result = Awaited<ReturnType<typeof designFromExecution>>;
 export function ExcelIndicatorDesigner({
   onTrackProjects,
   onAdopt,
+  incomingUpload,
 }: {
+  incomingUpload: { name: string; workbook: ExecutionWorkbook } | null;
   onTrackProjects: (projects: ExecutionProject[], year: number) => void;
   onAdopt: (projectId: string, indicator: Indicator) => void;
 }) {
@@ -28,6 +30,18 @@ export function ExcelIndicatorDesigner({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [fileName, setFileName] = useState("");
+  useEffect(() => {
+    if (!incomingUpload) return;
+    setWorkbook(incomingUpload.workbook);
+    setFileName(incomingUpload.name);
+    setResult(null);
+    setSelected("");
+    setYear("");
+    setError("");
+    document
+      .getElementById("excel-project-import")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [incomingUpload]);
   async function load(file?: File) {
     if (!file) return;
     setBusy(true);
@@ -88,7 +102,7 @@ export function ExcelIndicatorDesigner({
   const project = workbook?.projects.find((item) => item.id === selected);
   return (
     <div className="space-y-5">
-      <section className={panel}>
+      <section id="excel-project-import" className={panel}>
         <h2 className="text-xl font-semibold">Del Excel a indicadores que puedes medir</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           1. Carga tu consolidado. 2. Crea el seguimiento de sus proyectos. 3. Incorpora los
@@ -114,7 +128,8 @@ export function ExcelIndicatorDesigner({
         {workbook && (
           <div className="mt-4 space-y-3">
             <p className="text-sm">
-              {fileName} · {workbook.projects.length} proyectos reconocidos
+              {fileName} · {workbook.projects.length} proyectos reconocidos. Se detectó un
+              consolidado: indica la vigencia y crea el seguimiento.
             </p>
             <label className="block text-sm font-medium">
               Vigencia de los planes (revisa el Excel, no se deduce del nombre del archivo)
