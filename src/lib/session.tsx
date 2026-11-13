@@ -50,7 +50,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [project, setProjectState] = useState<ProjectInput>(EMPTY_PROJECT);
   const [analysis, setAnalysis] = useState<SessionAnalysis | null>(null);
   const [settings, setSettingsState] = useState<PlatformSettings>(defaultSettings);
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(2);
 
   const value = useMemo<SessionValue>(
     () => ({

@@ -89,6 +89,17 @@ export const learningEntrySchema = z
       });
   });
 export type LearningEntry = z.infer<typeof learningEntrySchema>;
+export const causalPlanSchema = z.object({
+  sourceText: z.string().max(120000),
+  activities: z.array(text).max(100),
+  outputs: z.array(text).max(100),
+  outcomes: z.array(text).max(100),
+  impact: text,
+  activityAssumption: text,
+  outcomeAssumption: text,
+  impactAssumption: text,
+});
+export type CausalPlan = z.infer<typeof causalPlanSchema>;
 export const trackedProjectSchema = z.object({
   id,
   name: z.string().min(1).max(500),
@@ -99,6 +110,8 @@ export const trackedProjectSchema = z.object({
   cooperation: cooperationSchema,
   declaredGoals: z.array(z.number().int().min(1).max(17)).default([]),
   learning: z.array(learningEntrySchema).max(2000).default([]),
+  causalPlan: causalPlanSchema.nullable().default(null),
+  indicatorSuggestions: z.array(trackingIndicatorSchema).max(100).default([]),
 });
 export const portfolioSchema = z
   .object({

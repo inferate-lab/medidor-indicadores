@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import type { ExecutionProject } from "@/types/execution";
 import { ExecutionMonitor } from "@/components/ExecutionMonitor";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
 import { DEMO_PROJECT, buildDemoAnalysis } from "@/data/demo-project";
@@ -54,7 +55,7 @@ export const Route = createFileRoute("/")({ component: Index });
 const STEPS = [
   "Marcos de la fundación",
   "Proyecto",
-  "Contexto opcional",
+  "Teoría del cambio",
   "Indicadores sugeridos",
   "ODS y línea base",
   "Marco lógico",
@@ -80,8 +81,10 @@ function MedidorApp() {
   const { step, setStep, analysis, project, reset } = useSession();
   const [mode, setMode] = useState<"monitor" | "design">("design");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [incomingExecution, setIncomingExecution] = useState<ExecutionProject | null>(null);
   const [incomingFile, setIncomingFile] = useState<File | null>(null);
   const [incomingDesign, setIncomingDesign] = useState<{ input: ProjectInput; analysis: SessionAnalysis } | null>(null);
+  const [activeContext, setActiveContext] = useState<{ id: string; name: string } | null>(null);
   const [monitorGeneration, setMonitorGeneration] = useState(0);
   const routeExcel = (file: File) => { setIncomingFile(file); setAdvancedOpen(false); };
   return (
@@ -110,22 +113,23 @@ function MedidorApp() {
           </button>
         </div>
         {mode === "monitor" ? (
-          <ExecutionMonitor key={monitorGeneration} />
+          <ExecutionMonitor key={monitorGeneration} onOpenMel={(selected) => { setIncomingExecution(selected); setMode("design"); setAdvancedOpen(false); }} />
         ) : (
           <>
-            <ProjectWorkspace onInputsHandled={() => { setIncomingFile(null); setIncomingDesign(null); }} incomingFile={incomingFile} incomingDesign={incomingDesign} onReset={() => { reset(); setIncomingFile(null); setIncomingDesign(null); setAdvancedOpen(false); setMonitorGeneration((n) => n + 1); }} />
+            <ProjectWorkspace incomingExecution={incomingExecution} onProjectContext={(context) => { setActiveContext(context); setAdvancedOpen(false); }} onInputsHandled={() => { setIncomingFile(null); setIncomingDesign(null); setIncomingExecution(null); }} incomingFile={incomingFile} incomingDesign={incomingDesign} onReset={() => { reset(); setIncomingFile(null); setIncomingDesign(null); setIncomingExecution(null); setAdvancedOpen(false); setMonitorGeneration((n) => n + 1); }} />
             <details className="mt-6" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
-            <summary className="cursor-pointer rounded-lg border bg-card p-4 text-sm font-medium">Opcional: diseñar desde documentos o editar fichas y marco lógico</summary>
+            <summary className="cursor-pointer rounded-lg border bg-card p-4 text-sm font-medium">Crear otro proyecto desde documentos (opcional)</summary>
+            <p className="mt-3 rounded border bg-card p-3 text-sm">{activeContext ? `Estás trabajando ${activeContext.name} en la ficha de arriba. Sus indicadores, teoría del cambio y marco lógico están en esa ficha. Este formulario sirve para crear otro proyecto desde documentos.` : "Para diseñar un proyecto nuevo: carga su descripción, revisa indicadores y crea su seguimiento. Los marcos institucionales son una configuración opcional."}</p>
             {analysis && <button className={`${buttonPrimary} mt-3`} onClick={() => { setIncomingDesign({ input: project, analysis }); setAdvancedOpen(false); }}>Crear seguimiento MEL de este diseño</button>}
             <Stepper current={step} onSelect={(next) => (next <= 2 || analysis ? setStep(next) : undefined)} />
             <div className="mt-6">
-              {step === 1 && <FrameworksStep />}
               {step === 2 && <ProjectStep onExcelFile={routeExcel} />}
               {step === 3 && analysis && <UnderstandingStep />}
               {step === 4 && analysis && <IndicatorsStep />}
               {step === 5 && analysis && <OdsBaselineStep />}
               {step === 6 && analysis && <LogicalFrameworkStep />}
             </div>
+            <details className="mt-4"><summary className="cursor-pointer text-sm font-medium">Configuración opcional: marcos institucionales</summary><FrameworksStep /></details>
             </details>
           </>
         )}
@@ -137,9 +141,9 @@ function MedidorApp() {
 function Stepper({ current, onSelect }: { current: number; onSelect: (step: number) => void }) {
   return (
     <nav aria-label="Progreso del análisis" className="overflow-x-auto">
-      <ol className="flex min-w-[940px] gap-2">
-        {STEPS.map((label, index) => {
-          const number = index + 1;
+      <ol className="flex min-w-[760px] gap-2">
+        {STEPS.slice(1).map((label, index) => {
+          const number = index + 2;
           const active = number === current;
           const done = number < current;
           return (
@@ -149,7 +153,7 @@ function Stepper({ current, onSelect }: { current: number; onSelect: (step: numb
                 className={`flex w-full items-center gap-2 rounded-lg border px-3 py-3 text-left text-sm transition ${active ? "border-primary bg-primary text-primary-foreground" : done ? "border-success/40 bg-accent text-accent-foreground" : "bg-card text-muted-foreground hover:border-primary/40"}`}
               >
                 <span className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold ${active ? "bg-white/20" : "bg-muted"}`}>
-                  {done ? <Check className="size-3" /> : number}
+                  {done ? <Check className="size-3" /> : number - 1}
                 </span>
                 <span>{label}</span>
               </button>

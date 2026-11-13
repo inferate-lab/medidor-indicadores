@@ -18,7 +18,11 @@ export function ExcelIndicatorDesigner({
   incomingUpload,
   onUpload,
   uploadBusy,
+  selectedProjectId,
+  onSelectProject,
 }: {
+  selectedProjectId: string;
+  onSelectProject: (id: string) => void;
   onUpload: (file: File) => Promise<void>;
   uploadBusy: boolean;
   incomingUpload: { name: string; workbook: ExecutionWorkbook } | null;
@@ -44,6 +48,12 @@ export function ExcelIndicatorDesigner({
       .getElementById("excel-project-import")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [incomingUpload]);
+  useEffect(() => {
+    if (workbook?.projects.some((p) => p.id === selectedProjectId)) {
+      setSelected(selectedProjectId);
+      setResult(null);
+    }
+  }, [selectedProjectId, workbook]);
   async function suggest() {
     const project = workbook?.projects.find((item) => item.id === selected);
     if (!project) return;
@@ -133,6 +143,7 @@ export function ExcelIndicatorDesigner({
               onClick={() => {
                 try {
                   onTrackProjects(workbook.projects, Number(year));
+                  onSelectProject(selected || workbook.projects[0]!.id);
                   setError("");
                 } catch (cause) {
                   setError(
@@ -152,6 +163,7 @@ export function ExcelIndicatorDesigner({
                 value={selected}
                 onChange={(event) => {
                   setSelected(event.target.value);
+                  onSelectProject(event.target.value);
                   setResult(null);
                 }}
               >

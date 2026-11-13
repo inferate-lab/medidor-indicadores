@@ -125,3 +125,9 @@ La pantalla principal permite **Crear un proyecto nuevo**, sin datos de ejemplo.
 Cada proyecto incluye **Medición ODS** (metas vinculadas a indicadores locales, valores y fuentes) y **Evaluación y aprendizaje** (hallazgos, decisiones, responsables, plazos y cierre con evidencia). Puedes **Eliminar este proyecto** o **Empezar de cero**, con confirmación y respaldo opcional. La cartera vacía persiste al recargar. La actualización conserva respaldos anteriores.
 
 Consulta el diagnóstico en `docs/ANALISIS_MEL_Y_USABILIDAD.md` y los alcances en `docs/REPORTE_CICLO_MEL.md`.
+
+## Ficha integrada por proyecto
+
+Seleccionar una tarjeta o elegir un proyecto del Excel cambia el contexto completo de su ficha. Usa **Teoría del cambio** para revisar la cadena y los supuestos; **Marco lógico** reúne esa cadena con los indicadores y mediciones del mismo proyecto y permite descargarla. Un proyecto nuevo también recibe su propio borrador cuando su descripción es suficiente. Los indicadores propuestos se incorporan al seguimiento solo cuando los eliges.
+
+Desde ejecución, **Abrir ficha MEL: indicadores, teoría y marco lógico** recupera la ficha existente o lleva el proyecto al flujo de creación de seguimiento. El formulario **Crear otro proyecto desde documentos** es independiente y sus marcos institucionales son opcionales. Más información: `docs/REPORTE_FICHA_PROYECTO_INTEGRADA.md`.

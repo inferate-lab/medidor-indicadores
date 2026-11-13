@@ -21,6 +21,8 @@ export function createMelProject(name: string, description: string): TrackedProj
     cooperation: emptyCooperation(),
     declaredGoals: [],
     learning: [],
+    causalPlan: null,
+    indicatorSuggestions: [],
   };
 }
 export function trackDesignedProject(
@@ -30,6 +32,8 @@ export function trackDesignedProject(
   const project = createMelProject(input.name, input.text);
   return {
     ...project,
+    causalPlan: designPlanFromAnalysis(project, analysis),
+    indicatorSuggestions: analysis.indicators.map(adoptIndicator),
     indicators: analysis.indicators.map(adoptIndicator),
     cooperation: {
       ...project.cooperation,
@@ -112,4 +116,73 @@ export function closeLearning(project: TrackedProject, id: string, review: strin
   if (!entry) throw new Error("No se encontró la acción.");
   const closed = learningEntrySchema.parse({ ...entry, status: "cerrada", review });
   return { ...project, learning: project.learning.map((e) => (e.id === id ? closed : e)) };
+}
+
+export function designPlanFromAnalysis(project: TrackedProject, analysis: SessionAnalysis) {
+  return {
+    sourceText: project.description,
+    activities: analysis.causal.activities,
+    outputs: analysis.causal.outputs,
+    outcomes: analysis.causal.outcomes,
+    impact: analysis.causal.impact,
+    activityAssumption: "",
+    outcomeAssumption: "",
+    impactAssumption: "",
+  };
+}
+export async function prepareProjectDesign(project: TrackedProject): Promise<TrackedProject> {
+  const analysis = await suggestForMelProject(project);
+  return {
+    ...project,
+    causalPlan: project.causalPlan ?? designPlanFromAnalysis(project, analysis),
+    indicatorSuggestions: analysis.indicators.map(adoptIndicator),
+  };
+}
+export function incorporateSuggestion(project: TrackedProject, id: string): TrackedProject {
+  const candidate = project.indicatorSuggestions.find((i) => i.id === id);
+  if (!candidate) throw new Error("La sugerencia no pertenece a este proyecto.");
+  if (project.indicators.some((i) => i.id === id)) return project;
+  return { ...project, indicators: [...project.indicators, candidate] };
+}
+export function projectLogframe(project: TrackedProject, period = "") {
+  const plan = project.causalPlan;
+  const rows = [
+    {
+      level: "impacto",
+      title: "Impacto al que contribuye",
+      statements: plan?.impact ? [plan.impact] : [],
+      assumption: plan?.impactAssumption ?? "",
+    },
+    {
+      level: "resultado",
+      title: "Resultados esperados",
+      statements: plan?.outcomes ?? [],
+      assumption: plan?.outcomeAssumption ?? "",
+    },
+    {
+      level: "producto",
+      title: "Productos",
+      statements: plan?.outputs ?? [],
+      assumption: plan?.activityAssumption ?? "",
+    },
+    {
+      level: "gestion",
+      title: "Actividades y ejecución",
+      statements: plan?.activities ?? [],
+      assumption: "",
+    },
+  ] as const;
+  return rows.map((row) => ({
+    ...row,
+    indicators: project.indicators
+      .filter((i) => i.level === row.level)
+      .map((indicator) => {
+        const history = latestObservations(project, indicator.id);
+        const observation = period ? history.find((o) => o.period === period) : history.at(-1);
+        return { indicator, observation, assessment: assessMeasurement(indicator, observation) };
+      }),
+    suggestions: project.indicatorSuggestions.filter(
+      (i) => i.level === row.level && !project.indicators.some((own) => own.id === i.id),
+    ),
+  }));
 }

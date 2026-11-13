@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import { ExcelIndicatorDesigner } from "@/components/ExcelIndicatorDesigner";
+import { TheoryPanel, LogframePanel } from "@/components/ProjectDesignPanels";
+import { prepareProjectDesign } from "@/lib/mel-workflow";
 import { OdsMeasurementPanel, LearningPanel, ProjectSuggestions } from "@/components/MelPanels";
 import { createMelProject, trackDesignedProject } from "@/lib/mel-workflow";
 import type { ProjectInput, SessionAnalysis } from "@/types/medidor";
@@ -33,7 +35,7 @@ import {
   validateTrackingIndicator,
 } from "@/lib/project-tracking";
 import { classifyWorkbookUpload, selectedSheetDescription } from "@/lib/workbook-upload";
-import type { ExecutionWorkbook } from "@/types/execution";
+import type { ExecutionProject, ExecutionWorkbook } from "@/types/execution";
 import { sanitizeCell } from "@/lib/sanitize";
 
 const panel = "rounded-xl border bg-card p-5 shadow-sm";
@@ -67,13 +69,17 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export function ProjectWorkspace({
   incomingFile,
   incomingDesign,
+  incomingExecution,
   onReset,
   onInputsHandled,
+  onProjectContext,
 }: {
+  incomingExecution: ExecutionProject | null;
   incomingFile: File | null;
   incomingDesign: { input: ProjectInput; analysis: SessionAnalysis } | null;
   onReset: () => void;
   onInputsHandled: () => void;
+  onProjectContext: (context: { id: string; name: string } | null) => void;
 }) {
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
@@ -125,6 +131,9 @@ export function ProjectWorkspace({
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [focusIndicator]);
   const project = portfolio.projects.find((p) => p.id === selected);
+  useEffect(() => {
+    onProjectContext(project ? { id: project.id, name: project.name } : null);
+  }, [project?.id, project?.name]);
   const updateProject = (updated: TrackedProject) =>
     setPortfolio((current) => ({
       ...current,
@@ -146,6 +155,17 @@ export function ProjectWorkspace({
       onInputsHandled();
     }
   }, [incomingDesign]);
+  useEffect(() => {
+    if (!ready || !incomingExecution) return;
+    setSelected(incomingExecution.id);
+    setFocusIndicator("");
+    if (!portfolio.projects.some((p) => p.id === incomingExecution.id))
+      setProjectUpload({
+        name: `Proyecto seleccionado: ${incomingExecution.name}`,
+        workbook: { projects: [incomingExecution], skippedSheets: [], warnings: [] },
+      });
+    onInputsHandled();
+  }, [ready, incomingExecution]);
   function createNew() {
     try {
       const added = createMelProject(newName, newDescription);
@@ -514,9 +534,30 @@ export function ProjectWorkspace({
           initialIndicator={focusIndicator}
           project={project}
           onChange={updateProject}
+          onDesignReady={(prepared) =>
+            setPortfolio((current) => ({
+              ...current,
+              projects: current.projects.map((own) =>
+                own.id === prepared.id
+                  ? {
+                      ...own,
+                      causalPlan: own.causalPlan ?? prepared.causalPlan,
+                      indicatorSuggestions: own.indicatorSuggestions.length
+                        ? own.indicatorSuggestions
+                        : prepared.indicatorSuggestions,
+                    }
+                  : own,
+              ),
+            }))
+          }
         />
       )}
       <ExcelIndicatorDesigner
+        selectedProjectId={selected}
+        onSelectProject={(id) => {
+          setSelected(id);
+          setFocusIndicator("");
+        }}
         onUpload={importMeasurements}
         uploadBusy={uploadBusy}
         key={designerGeneration}
@@ -557,19 +598,69 @@ function ProjectFollowup({
   project,
   onChange,
   initialIndicator,
+  onDesignReady,
 }: {
   project: TrackedProject;
   onChange: (project: TrackedProject) => void;
   initialIndicator: string;
+  onDesignReady: (project: TrackedProject) => void;
 }) {
-  const [tab, setTab] = useState<"medicion" | "cooperacion" | "ods" | "learning">("medicion");
+  const [tab, setTab] = useState<
+    "medicion" | "cooperacion" | "ods" | "learning" | "theory" | "logframe"
+  >("medicion");
   const [selected, setSelected] = useState(initialIndicator || project.indicators[0]?.id || "");
   const [reviewPeriod, setReviewPeriod] = useState("");
   const indicator = project.indicators.find((i) => i.id === selected);
+  const [preparing, setPreparing] = useState(false);
+  const [designError, setDesignError] = useState("");
+  useEffect(() => {
+    if (project.causalPlan || project.description.trim().length < 80) return;
+    let active = true;
+    setPreparing(true);
+    setDesignError("");
+    prepareProjectDesign(project)
+      .then((prepared) => {
+        if (active) onDesignReady(prepared);
+      })
+      .catch((cause) => {
+        if (active) setDesignError(errorMessage(cause));
+      })
+      .finally(() => {
+        if (active) setPreparing(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [project.id, project.description.trim().length >= 80]);
   const gaps = trackingGaps(project);
   return (
     <section id="seguimiento-proyecto" className={`${panel} space-y-4`}>
       <h2 className="text-xl font-semibold">Seguimiento: {project.name}</h2>
+      <p className="text-sm text-muted-foreground">
+        Toda esta ficha corresponde a <strong>{project.name}</strong>: indicadores, mediciones, ODS,
+        teoría del cambio y marco lógico. Cambiar de proyecto cambia el contexto completo.
+      </p>
+      {preparing && (
+        <p role="status" className="text-sm">
+          Preparando el borrador y las sugerencias de este proyecto…
+        </p>
+      )}
+      {designError && (
+        <p role="alert" className="text-sm text-red-800">
+          {designError}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button className={tab === "theory" ? primary : button} onClick={() => setTab("theory")}>
+          Teoría del cambio
+        </button>
+        <button
+          className={tab === "logframe" ? primary : button}
+          onClick={() => setTab("logframe")}
+        >
+          Marco lógico
+        </button>
+      </div>
       <div className="flex flex-wrap gap-2">
         <button
           className={tab === "medicion" ? primary : button}
@@ -597,7 +688,11 @@ function ProjectFollowup({
       </div>
       {tab === "medicion" ? (
         <>
-          <ProjectSuggestions project={project} onChange={onChange} />
+          <ProjectSuggestions
+            project={project}
+            onChange={onChange}
+            onMeasure={(id) => setSelected(id)}
+          />
           <Field label="Periodo a revisar (vacío: último registro de cada indicador)">
             <input
               className={input}
@@ -677,6 +772,17 @@ function ProjectFollowup({
             />
           )}
         </>
+      ) : tab === "theory" ? (
+        <TheoryPanel project={project} onChange={onChange} />
+      ) : tab === "logframe" ? (
+        <LogframePanel
+          project={project}
+          onChange={onChange}
+          onMeasure={(id) => {
+            setSelected(id);
+            setTab("medicion");
+          }}
+        />
       ) : tab === "ods" ? (
         <OdsMeasurementPanel
           project={project}

@@ -21,7 +21,7 @@ export function parsePortfolio(text: string): Portfolio {
       `El respaldo no es válido: ${result.error.issues[0]?.message ?? "estructura incompatible"}`,
     );
   for (const project of result.data.projects)
-    for (const indicator of project.indicators) {
+    for (const indicator of [...project.indicators, ...project.indicatorSuggestions]) {
       validateTrackingIndicator(indicator);
     }
   return result.data;
@@ -155,6 +155,8 @@ export function trackExecutionProject(
     cooperation: emptyCooperation(),
     declaredGoals: project.declaredGoals,
     learning: [],
+    causalPlan: null,
+    indicatorSuggestions: [],
   };
 }
 export function addTrackedProjects(portfolio: Portfolio, projects: TrackedProject[]): Portfolio {

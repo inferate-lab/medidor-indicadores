@@ -65,7 +65,7 @@ function Bar({ value, tone }: { value: number | null; tone: "plan" | "done" }) {
   );
 }
 
-export function ExecutionMonitor() {
+export function ExecutionMonitor({ onOpenMel }: { onOpenMel: (project: ExecutionProject) => void }) {
   const [workbook, setWorkbook] = useState<ExecutionWorkbook | null>(null);
   const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -164,10 +164,10 @@ export function ExecutionMonitor() {
     );
   }
 
-  return <ProjectView project={project} analysis={analysis} onBack={() => setSelected("")} />;
+  return <ProjectView project={project} analysis={analysis} onBack={() => setSelected("")} onOpenMel={() => onOpenMel(project)} />;
 }
 
-function ProjectView({ project, analysis, onBack }: { project: ExecutionProject; analysis: ExecutionAnalysis; onBack: () => void }) {
+function ProjectView({ project, analysis, onBack, onOpenMel }: { project: ExecutionProject; analysis: ExecutionAnalysis; onBack: () => void; onOpenMel: () => void }) {
   const [insights, setInsights] = useState<ProjectInsights | null>(null);
   const [failed, setFailed] = useState(false);
   const [women, setWomen] = useState("");
@@ -205,6 +205,7 @@ function ProjectView({ project, analysis, onBack }: { project: ExecutionProject;
         <div>
           <button className="text-sm text-primary underline" onClick={onBack}>← Todos los proyectos</button>
           <h2 className="mt-1 text-2xl font-semibold">{project.name}</h2>
+          <button className="mt-3 rounded-md border bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" onClick={onOpenMel}>Abrir ficha MEL: indicadores, teoría y marco lógico</button>
           {project.purpose && <p className="mt-1 max-w-4xl text-sm text-muted-foreground">{project.purpose.slice(0, 320)}{project.purpose.length > 320 ? "…" : ""}</p>}
         </div>
       </div>

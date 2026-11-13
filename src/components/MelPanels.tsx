@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { ODS_SOURCE } from "@/data/ods-catalog";
-import { adoptIndicator, latestObservations } from "@/lib/project-tracking";
+import { latestObservations } from "@/lib/project-tracking";
 import {
   closeLearning,
   declaredGoalsWithoutMeasurement,
   odsMeasurementRows,
   saveLearning,
-  suggestForMelProject,
+  prepareProjectDesign,
+  incorporateSuggestion,
 } from "@/lib/mel-workflow";
 import type { TrackedProject } from "@/types/project-tracking";
-import type { SessionAnalysis } from "@/types/medidor";
 
 const input = "mt-1 block w-full rounded border bg-background p-2 text-sm";
 const button =
@@ -20,18 +20,19 @@ const message = (error: unknown) =>
 export function ProjectSuggestions({
   project,
   onChange,
+  onMeasure,
 }: {
   project: TrackedProject;
   onChange: (project: TrackedProject) => void;
+  onMeasure: (id: string) => void;
 }) {
-  const [analysis, setAnalysis] = useState<SessionAnalysis | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function suggest() {
     setBusy(true);
     setError("");
     try {
-      setAnalysis(await suggestForMelProject(project));
+      onChange(await prepareProjectDesign(project));
     } catch (cause) {
       setError(message(cause));
     } finally {
@@ -39,9 +40,9 @@ export function ProjectSuggestions({
     }
   }
   return (
-    <details className="rounded border p-3">
+    <details className="rounded border p-3" open={project.indicators.length === 0}>
       <summary className="cursor-pointer font-medium">
-        Revisar y sugerir indicadores de este proyecto
+        Indicadores propuestos para este proyecto
       </summary>
       <label className="mt-3 block text-sm">
         Descripción, objetivos, actividades y resultados esperados
@@ -51,7 +52,6 @@ export function ProjectSuggestions({
           value={project.description}
           onChange={(event) => {
             onChange({ ...project, description: event.target.value });
-            setAnalysis(null);
           }}
         />
       </label>
@@ -72,31 +72,30 @@ export function ProjectSuggestions({
         </p>
       )}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
-        {analysis?.indicators.map((indicator) => {
-          const adopted = adoptIndicator(indicator);
+        {project.indicatorSuggestions.map((indicator) => {
+          const adopted = indicator;
           const exists = project.indicators.some((own) => own.id === adopted.id);
           return (
             <article key={indicator.id} className="rounded border p-3 text-sm">
               <h4 className="font-semibold">{indicator.name}</h4>
               <p className="mt-1">{indicator.formula}</p>
               <p className="mt-1">
-                Fuente propuesta: {indicator.primarySource}. {indicator.frequency}.
+                Fuente propuesta: {indicator.source}. {indicator.frequency}.
               </p>
               <p className="mt-1">
-                Metas ODS para revisión:{" "}
-                {indicator.odsAlignments.map((a) => a.targetCode).join(", ") ||
-                  "Sin asociación específica"}
-                .
+                Metas ODS para revisión: {indicator.ods.join(", ") || "Sin asociación específica"}.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {indicator.recommendationRationale}
+                {indicator.odsRationale ||
+                  "Propuesta por revisar contra el resultado esperado del proyecto."}
               </p>
               <button
                 className={`${button} mt-2`}
                 disabled={exists}
-                onClick={() =>
-                  onChange({ ...project, indicators: [...project.indicators, adopted] })
-                }
+                onClick={() => {
+                  onChange(incorporateSuggestion(project, adopted.id));
+                  onMeasure(adopted.id);
+                }}
               >
                 {exists ? "Ya está en seguimiento" : "Incorporar este indicador"}
               </button>
