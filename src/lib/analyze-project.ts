@@ -5,6 +5,8 @@ import {
   type IndicatorTemplate,
 } from "@/data/indicator-library";
 import { bidReferencesForIndicator } from "@/data/bid-catalog";
+import type { OdsPathway } from "@/data/ods-pathways";
+import { pathwaysForText } from "@/lib/ods-contribution";
 import { colombiaReferencesForIndicator } from "@/data/colombia-context-catalog";
 import { reviewLogicalFramework, suggestFrameworkIds } from "@/lib/framework-rules";
 import { buildAlignment } from "@/lib/ods-rules";
@@ -426,6 +428,98 @@ function concreteIndicatorCopy(template: IndicatorTemplate, project: ProjectInpu
   return original;
 }
 
+const MAX_INDICATORS = 12;
+const MAX_PATHWAY_INDICATORS = 3;
+
+function pathwayTemplate(pathway: OdsPathway, hits: string[]): IndicatorTemplate {
+  const { outcome } = pathway;
+  return {
+    id: `ods_${pathway.id}`,
+    sectors: pathway.sectors,
+    keywords: hits,
+    name: outcome.name,
+    level: outcome.level,
+    dimension: pathway.dimension,
+    observedChange: outcome.observedChange,
+    decisionInformed: `Decidir si las actividades de ${pathway.theme.toLowerCase()} producen el cambio esperado y merecen ampliarse o ajustarse.`,
+    unit: outcome.unit,
+    numerator: outcome.numerator,
+    denominator: outcome.denominator,
+    formula:
+      outcome.denominator === "No aplica"
+        ? `Conteo de ${outcome.numerator.toLowerCase()}`
+        : `(${outcome.numerator} / ${outcome.denominator}) × 100`,
+    source: outcome.instrument,
+    instrument: outcome.instrument,
+    technique: outcome.technique,
+    frequency: outcome.frequency,
+    responsible: "Equipo MEL con el equipo de campo",
+    burden: "media",
+    sphere: "influencia",
+    horizon: "mediano",
+    accumulation: "no_acumulado",
+    disaggregations: ["Sexo", "Edad", "Territorio"],
+    baseline: outcome.baseline,
+    ods: [pathway.targetCode],
+    references: ["ods"],
+    tier: "esencial",
+    attributionLimits: pathway.bridge,
+  };
+}
+
+/**
+ * Conecta la batería con las metas ODS que el texto del proyecto respalda:
+ * agrega el indicador de resultado de cada ruta detectada y alinea los ODS de
+ * los demás indicadores con esas mismas metas, para que no apunten a metas que
+ * el proyecto no trabaja.
+ */
+function alignWithOdsPathways(
+  generic: Indicator[],
+  project: ProjectInput,
+  allSentences: string[],
+  frameworks: InstitutionalFramework[],
+): Indicator[] {
+  const matches = pathwaysForText(`${project.name} ${project.sector} ${project.text}`).slice(0, MAX_PATHWAY_INDICATORS);
+  const goals = new Set(matches.map((match) => Number(match.pathway.targetCode.split(".")[0])));
+
+  const pathwayIndicators = matches.map(({ pathway, hits }) => {
+    const indicator = makeIndicator(pathwayTemplate(pathway, hits), project, allSentences, frameworks);
+    indicator.recommendationRationale = `Se recomienda porque el proyecto trabaja ${pathway.theme.toLowerCase()} (menciona: ${hits.slice(0, 4).join(", ")}). Es la forma de mostrar su aporte a la meta ODS ${pathway.targetCode}.`;
+    indicator.odsAlignments = indicator.odsAlignments.map((alignment) => ({
+      ...alignment,
+      causalRationale: `${pathway.bridge} Palabras del proyecto que sostienen la relación: ${hits.slice(0, 4).join(", ")}.`,
+      compatibilityAssessment: `Indicador global de referencia: ${pathway.globalIndicator.code}, ${pathway.globalIndicator.name}. Mide a escala de país; este indicador de proyecto solo muestra contribución.`,
+    }));
+    if (pathway.id === "agua_potable") {
+      indicator.bidReferences = bidReferencesForIndicator("water_access", ["medio_ambiente"]);
+      indicator.colombiaReferences = colombiaReferencesForIndicator("water_access", ["medio_ambiente"]);
+    }
+    return indicator;
+  });
+
+  const aligned = generic.map((indicator) => {
+    // Los indicadores de gestión miden la operación; asociarlos a un ODS sería decorativo.
+    // Se exceptúan los de género, que Esteban vinculó a propósito como relación indirecta por revisar.
+    if (indicator.level === "gestion" && !indicator.id.startsWith("gender_")) return { ...indicator, odsAlignments: [] };
+    if (goals.size === 0) return indicator;
+    const kept = indicator.odsAlignments.filter((alignment) => goals.has(alignment.goalNumber));
+    if (kept.length === indicator.odsAlignments.length || kept.length === 0) return indicator;
+    return {
+      ...indicator,
+      odsAlignments: kept.map((alignment, index) => ({ ...alignment, role: index === 0 ? ("principal" as const) : ("secundaria" as const) })),
+    };
+  });
+
+  const ids = new Set(pathwayIndicators.map((indicator) => indicator.id));
+  const combined = [...pathwayIndicators, ...aligned.filter((indicator) => !ids.has(indicator.id))];
+  // Se respeta el tope de la batería quitando primero los complementarios del final.
+  while (combined.length > MAX_INDICATORS) {
+    const index = combined.map((indicator) => indicator.recommendationTier).lastIndexOf("complementario");
+    combined.splice(index >= 0 ? index : combined.length - 1, 1);
+  }
+  return combined;
+}
+
 function makeIndicator(
   template: IndicatorTemplate,
   project: ProjectInput,
@@ -628,7 +722,8 @@ export async function analyzeProject({
   const detectedSectors = detectSectors(data, allSentences);
   const causal = causalModel(data, allSentences, detectedSectors);
   const templates = selectTemplates(`${data.sector} ${data.text}`, detectedSectors);
-  const indicators = templates.map((template) => makeIndicator(template, data, allSentences, settings.frameworks));
+  const generic = templates.map((template) => makeIndicator(template, data, allSentences, settings.frameworks));
+  const indicators = alignWithOdsPathways(generic, data, allSentences, settings.frameworks);
   const logicalFrameworkReview = reviewLogicalFramework(data, causal, indicators, settings.rules);
   return {
     origin: "motor_local",
