@@ -188,10 +188,23 @@ export function OdsMeasurementPanel({
         <h4 className="font-semibold">ODS y metas por actividad</h4>
         <p className="mt-1 text-sm">
           La asociación usa el texto de cada actividad, su alcance y las aclaraciones que registres.
-          No hereda las metas de otras actividades del proyecto. La meta 6.1 corresponde a agua
-          potable; 6.2, a saneamiento e higiene. Las descripciones siguientes mantienen el texto del
-          catálogo ONU.
+          Cada vínculo muestra la evidencia de esa actividad y el texto de la meta del catálogo ONU.
+          El tema de otro proyecto no se utiliza para clasificar esta ficha.
         </p>
+        {!activityMappings.length && (
+          <p
+            role="status"
+            className="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+          >
+            Esta ficha no tiene actividades recuperadas: el objetivo institucional general no
+            permite clasificar el proyecto.{" "}
+            <a className="underline" href="#excel-project-import">
+              Carga de nuevo el Excel
+            </a>{" "}
+            para recuperar sus actividades sin borrar indicadores ni mediciones. También puedes
+            abrir esta ficha desde el proyecto del monitor después de cargar allí el archivo.
+          </p>
+        )}
         <div className="mt-3 max-h-[32rem] space-y-3 overflow-y-auto">
           {activityMappings.map(({ activity, candidates }) => (
             <article key={activity.id} className="rounded border bg-muted/20 p-3 text-sm">

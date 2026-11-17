@@ -12,6 +12,7 @@ import {
   measurementTemplateRows,
   parsePortfolio,
   recordObservation,
+  refreshExecutionSources,
   serializePortfolio,
   trackExecutionProject,
   trackingGaps,
@@ -39,6 +40,23 @@ const reading = (indicatorId: string, value: number | null = 10) => ({
 });
 
 describe("cartera y seguimiento por proyecto", () => {
+  it("recupera fuentes en fichas antiguas sin reemplazar mediciones ni aclaraciones", () => {
+    const source = parseExecutionGrids(buildDemoExecutionSheets()).projects[0]!;
+    const old = fixture();
+    const clarification = "Contenido confirmado por el equipo";
+    old.activitySources[0]!.clarification = clarification;
+    old.description = "Objetivo institucional general";
+    const refreshed = refreshExecutionSources(old, source);
+    expect(refreshed.description).toContain(source.activities[0]!.name);
+    expect(refreshed.activitySources[0]!.clarification).toBe(clarification);
+    expect(refreshed.indicators).toEqual(old.indicators);
+    expect(refreshed.observations).toEqual(old.observations);
+    expect(refreshed.causalPlan).toEqual(old.causalPlan);
+    expect(
+      refreshExecutionSources({ ...old, activitySources: [] }, source).activitySources.length,
+    ).toBeGreaterThan(0);
+    expect(() => refreshExecutionSources({ ...old, id: "otro" }, source)).toThrow("otro proyecto");
+  });
   it("recupera íntegramente indicadores, mediciones y ficha de cooperación", () => {
     const project = fixture();
     project.cooperation.replicableUnit = "Paquete de formación y acompañamiento";

@@ -24,7 +24,7 @@ import {
 } from "@/types/project-tracking";
 import {
   PORTFOLIO_STORAGE_KEY,
-  executionActivitySources,
+  refreshExecutionSources,
   cooperationBrief,
   addTrackedProjects,
   adoptIndicator,
@@ -166,6 +166,12 @@ export function ProjectWorkspace({
     if (!ready || !incomingExecution) return;
     setSelected(incomingExecution.id);
     setFocusIndicator("");
+    setPortfolio((current) => ({
+      ...current,
+      projects: current.projects.map((own) =>
+        own.id === incomingExecution.id ? refreshExecutionSources(own, incomingExecution) : own,
+      ),
+    }));
     if (!portfolio.projects.some((p) => p.id === incomingExecution.id))
       setProjectUpload({
         name: `Proyecto seleccionado: ${incomingExecution.name}`,
@@ -263,9 +269,7 @@ export function ProjectWorkspace({
           ...current,
           projects: current.projects.map((own) => {
             const source = uploaded.workbook.projects.find((p) => p.id === own.id);
-            return source && !own.activitySources.length
-              ? { ...own, activitySources: executionActivitySources(source) }
-              : own;
+            return source ? refreshExecutionSources(own, source) : own;
           }),
         }));
         setProjectUpload({ name: file.name, workbook: uploaded.workbook });

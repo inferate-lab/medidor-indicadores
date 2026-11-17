@@ -16,6 +16,15 @@ const LOCAL_PROXIES: Record<
   string,
   { name: string; numerator: string; denominator: string; instrument: string; limit: string }
 > = {
+  "4.7": {
+    name: "Porcentaje de participantes que adquieren competencias socioambientales en el proceso educativo",
+    numerator: "Participantes que alcanzan el criterio de aprendizaje socioambiental definido",
+    denominator: "Participantes con evaluación inicial y final comparable",
+    instrument:
+      "Evaluación de conocimientos y aplicación de competencias antes y después de las jornadas; definir rúbrica y criterio de logro",
+    limit:
+      "El indicador global 4.7.1 examina la incorporación de educación para el desarrollo sostenible y ciudadanía mundial en políticas, currículos, formación docente y evaluación. Esta medición local de aprendizaje aporta evidencia del proyecto, pero no sustituye ese indicador global.",
+  },
   "5.1": {
     name: "Porcentaje de barreras de discriminación identificadas con respuesta verificada",
     numerator: "Barreras de discriminación registradas con respuesta implementada y verificada",
@@ -189,7 +198,11 @@ export function activityOdsMappings(project: TrackedProject) {
           row: null,
           inferred: true,
         }))
-        .filter((source) => source.description.length > 15);
+        .filter(
+          (source) =>
+            source.description.length > 15 &&
+            !/^contribuir a la transformacion social.*ods/.test(plain(source.description)),
+        );
   return activities.map((activity) => ({
     activity,
     candidates: candidatesForActivity(project, activity),

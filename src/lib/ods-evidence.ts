@@ -1,5 +1,5 @@
 /** Condiciones de pertinencia: términos genéricos no acreditan un mecanismo de contribución. */
-export const ODS_CALIBRATION_VERSION = 1;
+export const ODS_CALIBRATION_VERSION = 2;
 export const normalizeOdsText = (text: string) =>
   text
     .normalize("NFD")

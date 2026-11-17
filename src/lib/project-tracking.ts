@@ -90,6 +90,37 @@ export function executionActivitySources(project: ExecutionProject) {
       clarification: "",
     }));
 }
+/** Actualiza únicamente el contexto documental de la misma ficha, nunca sus mediciones. */
+export function refreshExecutionSources(
+  own: TrackedProject,
+  source: ExecutionProject,
+): TrackedProject {
+  if (own.id !== source.id) throw new Error("La fuente pertenece a otro proyecto.");
+  const activitySources = executionActivitySources(source).map((activity) => ({
+    ...activity,
+    clarification:
+      own.activitySources.find((previous) => previous.id === activity.id)?.clarification ?? "",
+  }));
+  return {
+    ...own,
+    name: source.name,
+    sheet: source.sheet,
+    declaredGoals: source.declaredGoals,
+    description: executionDescription(source),
+    activitySources,
+  };
+}
+function executionDescription(project: ExecutionProject) {
+  return [
+    project.purpose,
+    project.objective,
+    ...project.scopes.map((scope) => scope.name),
+    ...project.activities.filter((a) => a.note !== "suprimida").map((a) => a.name),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 120000);
+}
 export function trackExecutionProject(
   project: ExecutionProject,
   year: number,
@@ -154,15 +185,7 @@ export function trackExecutionProject(
     name: project.name,
     sheet: project.sheet,
     activitySources: executionActivitySources(project),
-    description: [
-      project.purpose,
-      project.objective,
-      ...project.scopes.map((scope) => scope.name),
-      ...project.activities.filter((a) => a.note !== "suprimida").map((a) => a.name),
-    ]
-      .filter(Boolean)
-      .join("\n")
-      .slice(0, 120000),
+    description: executionDescription(project),
     indicators,
     observations,
     cooperation: emptyCooperation(),

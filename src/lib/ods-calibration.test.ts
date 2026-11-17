@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { readExecutionWorkbook } from "@/lib/execution-import";
-import { blankIndicator, trackExecutionProject } from "@/lib/project-tracking";
+import {
+  blankIndicator,
+  refreshExecutionSources,
+  trackExecutionProject,
+} from "@/lib/project-tracking";
 import { prepareProjectDesign } from "@/lib/mel-workflow";
 import { activityOdsMappings } from "@/lib/automatic-ods";
 
@@ -15,6 +19,34 @@ describe.skipIf(!process.env["MEDIDOR_WORKBOOK"])("auditoría de calibración de
     for (const source of workbook.projects) {
       const project = await prepareProjectDesign(trackExecutionProject(source, 2026));
       const mappings = activityOdsMappings(project);
+      const codes = mappings.flatMap((row) =>
+        row.candidates.map((candidate) => candidate.target.code),
+      );
+      if (!/Agua para|Gobernación/.test(project.name)) expect(codes).not.toContain("6.1");
+      if (/Hidrofonías/.test(project.name)) {
+        expect(codes).toContain("4.7");
+        expect(
+          mappings
+            .find((row) => /Primer Segmento/.test(row.activity.description))
+            ?.candidates.map((candidate) => candidate.target.code),
+        ).toContain("4.7");
+      }
+      if (/Afinia/.test(project.name)) {
+        const legacy = { ...project, activitySources: [], description: source.objective };
+        expect(activityOdsMappings(legacy)).toEqual([]);
+        const repaired = refreshExecutionSources(legacy, source);
+        expect(repaired.activitySources).toHaveLength(source.activities.length);
+        expect(repaired.observations).toEqual(legacy.observations);
+        expect(repaired.description).toContain("Educación a clientes");
+        expect(
+          activityOdsMappings(repaired).some((row) =>
+            /Visitas domiciliarias/.test(row.activity.description),
+          ),
+        ).toBe(true);
+        expect(() => refreshExecutionSources({ ...legacy, id: "otro-proyecto" }, source)).toThrow(
+          "otro proyecto",
+        );
+      }
       const water = project.indicatorSuggestions.filter((i) =>
         /agua potable|potabilizacion|gestion del agua/.test(
           i.name.normalize("NFD").replace(/\p{Diacritic}/gu, ""),
@@ -92,11 +124,21 @@ describe("regresión de calibración y medidores independientes", () => {
     );
     const own = { ...blankIndicator("indicador-salud"), name: "Atenciones verificadas" };
     old.indicators = [own];
-    old.observations = [{
-      id: "observacion-salud", indicatorId: own.id, period: "2026-03", value: 25,
-      planned: 30, explicitZero: false, evidence: "Registro de atención",
-      note: "", missingReason: "", recordedAt: "2026-03-31T12:00:00.000Z", revision: 1,
-    }];
+    old.observations = [
+      {
+        id: "observacion-salud",
+        indicatorId: own.id,
+        period: "2026-03",
+        value: 25,
+        planned: 30,
+        explicitZero: false,
+        evidence: "Registro de atención",
+        note: "",
+        missingReason: "",
+        recordedAt: "2026-03-31T12:00:00.000Z",
+        revision: 1,
+      },
+    ];
     old.indicatorProposalVersion = 0;
     old.indicatorSuggestions = [
       { ...old.indicatorSuggestions[0]!, name: "Propuesta antigua de agua" },
