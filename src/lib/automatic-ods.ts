@@ -1,3 +1,4 @@
+import { targetEvidenceSupported } from "@/lib/ods-evidence";
 import * as XLSX from "xlsx";
 import { findTarget, ODS_SOURCE } from "@/data/ods-catalog";
 import { THEME_RULES } from "@/data/theme-ods-map";
@@ -11,22 +12,6 @@ const plain = (s: string) =>
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
 const compact = (s: string) => s.replace(/\s+/g, " ").trim().slice(0, 600);
-function compatible(code: string, text: string) {
-  if (code === "12.8")
-    return /ambient|consumo responsable|consumo sostenible|estilos de vida sostenible|uso racional|eficiencia energetica|cuidado.*recurso/.test(
-      text,
-    );
-  if (code === "4.7")
-    return /sostenib|ambient|derechos humanos|igualdad de genero|ciudadania|paz|diversidad cultural/.test(
-      text,
-    );
-  if (code === "5.1") return /discrimin|barrera|igualdad de genero|equidad de genero/.test(text);
-  if (code === "13.3")
-    return (
-      /clima|climatic/.test(text) && /educa|sensibili|capacit|formacion|conocim|taller/.test(text)
-    );
-  return true;
-}
 const LOCAL_PROXIES: Record<
   string,
   { name: string; numerator: string; denominator: string; instrument: string; limit: string }
@@ -118,7 +103,7 @@ function candidatesForActivity(
   const text = plain(source);
   const scored = THEME_RULES.flatMap((rule) => {
     const matched = [...new Set(rule.keywords.filter((keyword) => text.includes(plain(keyword))))];
-    if (!matched.length || !compatible(rule.targetCode, text)) return [];
+    if (!matched.length || !targetEvidenceSupported(rule.targetCode, text)) return [];
     if (
       matched.every((word) =>
         new RegExp(`no (incluye|contempla|abarca|aborda|realiza)[^.\\n]{0,50}${plain(word)}`).test(

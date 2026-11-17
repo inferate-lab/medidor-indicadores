@@ -3,7 +3,12 @@ import * as XLSX from "xlsx";
 import { ExcelIndicatorDesigner } from "@/components/ExcelIndicatorDesigner";
 import { TheoryPanel, LogframePanel } from "@/components/ProjectDesignPanels";
 import { completeCooperationDraft, cooperationDraftNeeded } from "@/lib/cooperation-draft";
-import { prepareProjectDesign } from "@/lib/mel-workflow";
+import { ODS_CALIBRATION_VERSION } from "@/lib/ods-evidence";
+import {
+  prepareProjectDesign,
+  indicatorDraftNeedsRefresh,
+  mergePreparedProject,
+} from "@/lib/mel-workflow";
 import { OdsMeasurementPanel, LearningPanel, ProjectSuggestions } from "@/components/MelPanels";
 import { createMelProject, trackDesignedProject } from "@/lib/mel-workflow";
 import type { ProjectInput, SessionAnalysis } from "@/types/medidor";
@@ -549,15 +554,7 @@ export function ProjectWorkspace({
             setPortfolio((current) => ({
               ...current,
               projects: current.projects.map((own) =>
-                own.id === prepared.id
-                  ? completeCooperationDraft({
-                      ...own,
-                      causalPlan: own.causalPlan ?? prepared.causalPlan,
-                      indicatorSuggestions: own.indicatorSuggestions.length
-                        ? own.indicatorSuggestions
-                        : prepared.indicatorSuggestions,
-                    })
-                  : own,
+                own.id === prepared.id ? mergePreparedProject(own, prepared) : own,
               ),
             }))
           }
@@ -625,14 +622,24 @@ function ProjectFollowup({
   const [preparing, setPreparing] = useState(false);
   const [designError, setDesignError] = useState("");
   useEffect(() => {
-    const needsPlan = !project.causalPlan && project.description.trim().length >= 80;
-    if (!needsPlan && !cooperationDraftNeeded(project)) return;
+    const canAnalyze = project.description.trim().length >= 80;
+    const needsPlan = !project.causalPlan && canAnalyze;
+    const needsProposals = indicatorDraftNeedsRefresh(project);
+    if (!needsPlan && !needsProposals && !cooperationDraftNeeded(project)) return;
     let active = true;
     setPreparing(true);
     setDesignError("");
-    const preparation = needsPlan
-      ? prepareProjectDesign(project)
-      : Promise.resolve(completeCooperationDraft(project));
+    const preparation =
+      canAnalyze && (needsPlan || needsProposals)
+        ? prepareProjectDesign(project)
+        : Promise.resolve(
+            completeCooperationDraft({
+              ...project,
+              indicatorSuggestions: needsProposals ? [] : project.indicatorSuggestions,
+              indicatorProposalVersion: ODS_CALIBRATION_VERSION,
+              indicatorProposalSource: project.description,
+            }),
+          );
     preparation
       .then((prepared) => {
         if (active) onDesignReady(prepared);
@@ -651,6 +658,10 @@ function ProjectFollowup({
   return (
     <section id="seguimiento-proyecto" className={`${panel} space-y-4`}>
       <h2 className="text-xl font-semibold">Seguimiento: {project.name}</h2>
+      <p className="text-sm font-medium">
+        Medidor de indicadores propio de {project.name}. Las observaciones y referencias de esta
+        ficha se conservan solo en este proyecto.
+      </p>
       <p className="text-sm text-muted-foreground">
         Toda esta ficha corresponde a <strong>{project.name}</strong>: indicadores, mediciones, ODS,
         teoría del cambio y marco lógico. Cambiar de proyecto cambia el contexto completo.

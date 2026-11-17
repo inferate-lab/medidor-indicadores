@@ -1,3 +1,4 @@
+import { targetEvidenceSupported } from "@/lib/ods-evidence";
 import {
   INDICATOR_LIBRARY,
   REFERENCES,
@@ -373,7 +374,7 @@ function concreteIndicatorCopy(template: IndicatorTemplate, project: ProjectInpu
   const text = normalized(`${project.name} ${project.sector} ${project.text}`);
   // Solo se usa la redacción de robótica cuando el proyecto la nombra: "kit" o "programación" solos aparecen en muchos otros proyectos.
   const robotics = hasAny(text, ["robotica", "stem"]);
-  const water = hasAny(text, ["agua potable", "potabilizacion", "recurso hidrico", "acueducto"]);
+  const water = targetEvidenceSupported("6.1", text);
   const original: ConcreteIndicatorCopy = {
     name: template.name,
     unit: template.unit,
@@ -414,7 +415,9 @@ function concreteIndicatorCopy(template: IndicatorTemplate, project: ProjectInpu
   if (water) {
     const copy: Partial<Record<string, ConcreteIndicatorCopy>> = {
       g_participation: count("Número de personas que participan y completan la formación en gestión y uso racional del agua", "Número de personas", "personas que cumplen el criterio de participación y finalización de la formación", "Las personas completan la formación prevista en gestión y uso racional del agua."),
-      g_deliverables: count("Número de instituciones educativas con acceso a agua potable mediante soluciones de potabilización", "Número de instituciones educativas", "instituciones con solución de potabilización instalada, funcional y disponible", "Las instituciones educativas cuentan con acceso efectivo a agua potable mediante una solución funcional."),
+      g_deliverables: /instituciones educativas|escuelas|colegios/.test(text)
+        ? count("Número de instituciones educativas con acceso a agua potable mediante soluciones de potabilización", "Número de instituciones educativas", "instituciones con solución de potabilización instalada, funcional y disponible", "Las instituciones educativas cuentan con acceso efectivo a agua potable mediante una solución funcional.")
+        : count("Número de unidades atendidas con acceso verificado a agua potable", "Número de unidades atendidas", "unidades con acceso y funcionamiento verificados según criterios del proyecto", "Las unidades atendidas acceden a agua potable bajo condiciones verificables; definir la población y unidad antes de medir."),
       g_sustainability: count("Número de personas capacitadas en operación y mantenimiento de soluciones de potabilización", "Número de personas", "personas que completan y aprueban la capacitación práctica de operación y mantenimiento", "Las personas responsables demuestran capacidades para operar y mantener las soluciones de potabilización."),
       env_waste: { ...original, name: "Cantidad de material recuperado o reciclado incorporado en las soluciones de potabilización" },
       learning_gain: { ...original, name: "Nivel de apropiación de conocimientos sobre uso racional del agua y conservación de recursos naturales" },
@@ -501,6 +504,7 @@ function alignWithOdsPathways(
     // Los indicadores de gestión miden la operación; asociarlos a un ODS sería decorativo.
     // Se exceptúan los de género, que Esteban vinculó a propósito como relación indirecta por revisar.
     if (indicator.level === "gestion" && !indicator.id.startsWith("gender_")) return { ...indicator, odsAlignments: [] };
+    indicator = { ...indicator, odsAlignments: indicator.odsAlignments.filter((a) => targetEvidenceSupported(a.targetCode, project.text)) };
     if (goals.size === 0) return indicator;
     const kept = indicator.odsAlignments.filter((alignment) => goals.has(alignment.goalNumber));
     if (kept.length === indicator.odsAlignments.length || kept.length === 0) return indicator;
@@ -529,7 +533,7 @@ function makeIndicator(
   const evidence = evidenceFor(allSentences, template.keywords, 3);
   const concrete = concreteIndicatorCopy(template, project);
   const projectText = normalized(`${project.name} ${project.sector} ${project.text}`);
-  const waterProject = hasAny(projectText, ["agua potable", "potabilizacion", "recurso hidrico", "acueducto"]);
+  const waterProject = targetEvidenceSupported("6.1", projectText);
   const waterIndicator = waterProject && ["g_deliverables", "g_sustainability", "learning_gain", "learning_application"].includes(template.id);
   const bidReferences = [
     ...bidReferencesForIndicator(template.id, template.sectors),

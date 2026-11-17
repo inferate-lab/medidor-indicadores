@@ -135,6 +135,8 @@ export const trackedProjectSchema = z.object({
   learning: z.array(learningEntrySchema).max(2000).default([]),
   causalPlan: causalPlanSchema.nullable().default(null),
   indicatorSuggestions: z.array(trackingIndicatorSchema).max(100).default([]),
+  indicatorProposalVersion: z.number().int().nonnegative().default(0),
+  indicatorProposalSource: z.string().max(120000).default(""),
 });
 export const portfolioSchema = z
   .object({

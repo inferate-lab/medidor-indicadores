@@ -126,7 +126,9 @@ export function OdsMeasurementPanel({
   onChange: (project: TrackedProject) => void;
 }) {
   const [period, setPeriod] = useState("");
-  const rows = odsMeasurementRows(project, period);
+  const allRows = odsMeasurementRows(project, period);
+  const rows = allRows.filter((row) => row.hasActivityEvidence);
+  const needsReview = allRows.filter((row) => !row.hasActivityEvidence);
   const activityMappings = activityOdsMappings(project);
   const declared = declaredGoalsWithoutMeasurement(project);
   function download() {
@@ -141,7 +143,11 @@ export function OdsMeasurementPanel({
     );
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "propuesta-vinculacion-ods.xlsx";
+    anchor.download = `${project.name
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .slice(0, 70)}-ods-actividades.xlsx`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -149,7 +155,7 @@ export function OdsMeasurementPanel({
   }
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Cómo se mide la contribución del proyecto a los ODS</h3>
+      <h3 className="text-lg font-semibold">ODS y medidor de {project.name}</h3>
       <p className="text-sm">
         La ONU organiza la Agenda 2030 en ODS, metas específicas (también llamadas aquí «sub-ODS») e
         indicadores globales. La herramienta propone automáticamente la vinculación según el texto
@@ -274,6 +280,37 @@ export function OdsMeasurementPanel({
           automáticamente sus relaciones. No asigna un ODS por el nombre de una empresa ni por una
           lista de actividades sin contexto.
         </p>
+      )}
+      {needsReview.length > 0 && (
+        <details className="rounded border border-amber-200 p-3 text-sm">
+          <summary className="cursor-pointer font-medium">
+            Asociaciones registradas que necesitan contraste con las actividades (
+            {needsReview.length})
+          </summary>
+          <p className="mt-2">
+            Se conservan los datos registrados. La lectura actual no encontró una actividad que
+            respalde estas asociaciones; revisa la justificación antes de presentarlas como
+            contribución del proyecto.
+          </p>
+          {needsReview.map((row) => (
+            <div key={row.target.code} className="mt-2 rounded border p-3">
+              <p>
+                ODS {row.target.goal} · Meta {row.target.code}: {row.target.text}
+              </p>
+              {row.indicators.map(({ indicator, observation }) => (
+                <div key={indicator.id} className="mt-2">
+                  <p>
+                    {indicator.name}: {observation?.value ?? "Sin dato"} ·{" "}
+                    {observation?.period ?? "Sin periodo"}. {observation?.evidence}
+                  </p>
+                  <button className={button} onClick={() => onMeasure(indicator.id)}>
+                    Revisar asociación y medición guardadas
+                  </button>
+                </div>
+              ))}
+            </div>
+          ))}
+        </details>
       )}
       {declared.map((goal) => (
         <p key={goal.number} className="rounded border border-amber-200 p-3 text-sm">

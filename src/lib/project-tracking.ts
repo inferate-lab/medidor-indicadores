@@ -173,6 +173,8 @@ export function trackExecutionProject(
     learning: [],
     causalPlan: null,
     indicatorSuggestions: [],
+    indicatorProposalVersion: 0,
+    indicatorProposalSource: "",
   };
 }
 export function addTrackedProjects(portfolio: Portfolio, projects: TrackedProject[]): Portfolio {

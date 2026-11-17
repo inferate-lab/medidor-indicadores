@@ -36,10 +36,12 @@ describe("catálogo de rutas ODS", () => {
 
   it("reconoce palabras con tilde y respeta las exclusiones", () => {
     const water = ODS_PATHWAYS.find((item) => item.id === "agua_uso_eficiente")!;
-    expect(pathwayHits(water, "Taller de cuidado del agua")).toEqual(["cuidado del agua"]);
+    expect(pathwayHits(water, "Taller de cuidado del agua")).toEqual([]);
+    expect(pathwayHits(water, "Taller de uso eficiente del agua")).toContain("uso eficiente del agua");
     expect(pathwayHits(water, "Cuidado del agua y potabilización")).toEqual([]);
     const school = ODS_PATHWAYS.find((item) => item.id === "escuelas_eds")!;
-    expect(pathwayHits(school, "Talleres en Instituciones Educativas")).toContain("instituciones educativas");
+    expect(pathwayHits(school, "Talleres en Instituciones Educativas")).toEqual([]);
+    expect(pathwayHits(school, "Talleres de sostenibilidad en Instituciones Educativas")).toContain("instituciones educativas");
   });
 });
 

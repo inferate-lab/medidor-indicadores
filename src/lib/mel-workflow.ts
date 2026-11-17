@@ -1,3 +1,4 @@
+import { ODS_CALIBRATION_VERSION } from "@/lib/ods-evidence";
 import { automaticOdsCandidates } from "@/lib/automatic-ods";
 import { ODS_GOALS, findTarget } from "@/data/ods-catalog";
 import { completeCooperationDraft } from "@/lib/cooperation-draft";
@@ -29,6 +30,8 @@ export function createMelProject(name: string, description: string): TrackedProj
     learning: [],
     causalPlan: null,
     indicatorSuggestions: [],
+    indicatorProposalVersion: 0,
+    indicatorProposalSource: "",
   };
 }
 export function trackDesignedProject(
@@ -40,6 +43,8 @@ export function trackDesignedProject(
     ...project,
     causalPlan: designPlanFromAnalysis(project, analysis),
     indicatorSuggestions: analysis.indicators.map(adoptIndicator),
+    indicatorProposalVersion: ODS_CALIBRATION_VERSION,
+    indicatorProposalSource: project.description,
     indicators: analysis.indicators.map(adoptIndicator),
     cooperation: {
       ...project.cooperation,
@@ -106,6 +111,7 @@ export function odsMeasurementRows(project: TrackedProject, period = "") {
       {
         target,
         indicators,
+        hasActivityEvidence: Boolean(proposed),
         evidence: proposed?.evidence ?? [],
         rationale: proposed?.rationale ?? "Asociación registrada en la ficha del indicador.",
         limit:
@@ -175,6 +181,8 @@ export async function prepareProjectDesign(project: TrackedProject): Promise<Tra
     ...project,
     causalPlan: project.causalPlan ?? designPlanFromAnalysis(project, analysis),
     indicatorSuggestions: analysis.indicators.map(adoptIndicator),
+    indicatorProposalVersion: ODS_CALIBRATION_VERSION,
+    indicatorProposalSource: project.description,
   });
 }
 export function incorporateSuggestion(project: TrackedProject, id: string): TrackedProject {
@@ -224,4 +232,25 @@ export function projectLogframe(project: TrackedProject, period = "") {
       (i) => i.level === row.level && !project.indicators.some((own) => own.id === i.id),
     ),
   }));
+}
+
+export function indicatorDraftNeedsRefresh(project: TrackedProject) {
+  return (
+    project.indicatorProposalVersion < ODS_CALIBRATION_VERSION ||
+    project.indicatorProposalSource !== project.description
+  );
+}
+export function mergePreparedProject(
+  current: TrackedProject,
+  prepared: TrackedProject,
+): TrackedProject {
+  if (current.id !== prepared.id) throw new Error("El borrador pertenece a otro proyecto.");
+  if (prepared.indicatorProposalSource !== current.description) return current;
+  return completeCooperationDraft({
+    ...current,
+    causalPlan: current.causalPlan ?? prepared.causalPlan,
+    indicatorSuggestions: prepared.indicatorSuggestions,
+    indicatorProposalSource: prepared.indicatorProposalSource,
+    indicatorProposalVersion: prepared.indicatorProposalVersion,
+  });
 }

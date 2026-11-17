@@ -11,6 +11,7 @@
  * global ni permite atribuir al proyecto el avance del país.
  */
 
+import { targetEvidenceSupported } from "@/lib/ods-evidence";
 import type { BaselinePlan, CausalLevel, Dimension, SectorKey } from "@/types/medidor";
 
 export interface OdsPathway {
@@ -351,6 +352,7 @@ function plain(value: string): string {
 /** Palabras de la ruta que aparecen en un texto, respetando las exclusiones. */
 export function pathwayHits(pathway: OdsPathway, text: string): string[] {
   const value = plain(text);
+  if (!targetEvidenceSupported(pathway.targetCode, value)) return [];
   if (pathway.exclude?.some((term) => value.includes(term))) return [];
   return pathway.keywords.filter((keyword) => value.includes(keyword));
 }
