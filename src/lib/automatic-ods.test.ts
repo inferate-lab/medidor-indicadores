@@ -156,6 +156,8 @@ describe("vinculación automática ODS, meta e indicador local", () => {
     expect(mapped[1]?.candidates.map((c) => c.target.code)).toEqual(["6.2"]);
     expect(mapped[2]?.candidates.map((c) => c.target.code)).toEqual(["5.5"]);
     expect(mapped[3]?.candidates.map((c) => c.target.code)).toEqual(["5.2"]);
+    expect(mapped[3]?.candidates[0]?.limit).toContain("no mide prevalencia");
+    expect(mapped[1]?.candidates[0]?.limit).toContain("agua y jabón");
     expect(mapped[4]?.candidates).toEqual([]);
     const rows = XLSX.utils.sheet_to_json<unknown[]>(
       buildAutomaticOdsWorkbook(project).Sheets["Vinculación ODS"]!,

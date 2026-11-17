@@ -32,7 +32,7 @@ Las solicitudes a unstats.un.org y sdgs.un.org fueron bloqueadas por la polític
 
 ## Validación
 
-- 112 pruebas aprobadas, incluida la lectura del archivo de trabajo y casos de correspondencia por actividad, independencia entre filas, agua/energía, género, ambigüedad, aclaraciones, códigos oficiales, referencias, periodos, cero explícito y exportación.
+- 119 pruebas aprobadas después de integrar los cambios recientes de rutas ODS del repositorio, incluida la lectura del archivo de trabajo y casos de correspondencia por actividad, independencia entre filas, agua/energía, género, ambigüedad, aclaraciones, códigos oficiales, referencias, periodos, cero explícito y exportación.
 - TypeScript y compilaciones normal/estática completados.
 - Chromium con el archivo de trabajo: Afinia muestra actividades y referencias de origen, sin forzar una meta en charlas sin contenido; aclarar una actividad de consumo responsable y eficiencia energética propone 12.8 y 7.3 solo para ella; registrar su medición y releer el XLSX con la fila original.
 - Proyecto nuevo: cinco actividades separadas, con 6.1, 6.2, 5.5 y 5.2 en sus respectivas filas; actividad administrativa sin asignación. Aclaración y medición conservadas tras recargar. Sin errores de página ni desborde móvil.

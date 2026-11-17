@@ -31,6 +31,42 @@ const LOCAL_PROXIES: Record<
   string,
   { name: string; numerator: string; denominator: string; instrument: string; limit: string }
 > = {
+  "5.1": {
+    name: "Porcentaje de barreras de discriminación identificadas con respuesta verificada",
+    numerator: "Barreras de discriminación registradas con respuesta implementada y verificada",
+    denominator: "Barreras de discriminación registradas en el periodo",
+    instrument:
+      "Registro agregado de barreras, respuestas y verificación con la población, sin datos personales innecesarios",
+    limit:
+      "El indicador global 5.1.1 examina marcos jurídicos para promover, hacer cumplir y supervisar igualdad y no discriminación por sexo. La participación de mujeres o la respuesta a barreras locales no sustituye esa medición jurídica.",
+  },
+  "5.2": {
+    name: "Porcentaje de participantes que identifican rutas de apoyo frente a violencia de género",
+    numerator: "Participantes que identifican correctamente las rutas de apoyo acordadas",
+    denominator: "Participantes con evaluación comparable de conocimiento de rutas",
+    instrument:
+      "Evaluación agregada inicial y final sobre rutas, con salvaguardas y protocolo de respuesta",
+    limit:
+      "Los indicadores globales 5.2.1 y 5.2.2 miden violencia con definiciones, poblaciones y periodos específicos. Conocer una ruta de apoyo no mide prevalencia ni demuestra reducción de violencia.",
+  },
+  "5.5": {
+    name: "Porcentaje de cargos de decisión del espacio acompañado ocupados por mujeres",
+    numerator: "Cargos de decisión del espacio acompañado ocupados por mujeres",
+    denominator: "Total de cargos de decisión del mismo espacio y periodo",
+    instrument: "Registro de composición, tipo de cargo y evidencia de participación efectiva",
+    limit:
+      "Los indicadores globales 5.5.1 y 5.5.2 distinguen representación política y posiciones directivas. Un comité del proyecto no equivale automáticamente a sus universos estadísticos.",
+  },
+  "6.2": {
+    name: "Porcentaje de población atendida con acceso verificado a saneamiento e higiene",
+    numerator:
+      "Personas con servicio de saneamiento y condiciones de higiene verificadas según los criterios definidos",
+    denominator: "Población objetivo con verificación del servicio",
+    instrument:
+      "Verificación del servicio, uso y condiciones de higiene; distinguir instalación de acceso efectivo",
+    limit:
+      "El indicador global 6.2.1 distingue servicios de saneamiento gestionados sin riesgos y disponibilidad de instalaciones de lavado de manos con agua y jabón. Contar baños o letrinas instaladas no demuestra todos esos criterios.",
+  },
   "12.8": {
     name: "Porcentaje de participantes que aplican prácticas de consumo responsable después del acompañamiento",
     numerator: "Participantes que aplican una práctica definida y verificada",
