@@ -78,6 +78,18 @@ function sumKnown(values: (number | null)[]) {
   return known.length ? known.reduce((a, b) => a + b, 0) : null;
 }
 /** Un periodo por mes con evidencia de cobertura. No agrega porcentajes ni identifica personas únicas. */
+export function executionActivitySources(project: ExecutionProject) {
+  return project.activities
+    .filter((activity) => activity.note !== "suprimida")
+    .map((activity) => ({
+      id: activity.id,
+      description: activity.name,
+      scope: activity.scope,
+      sheet: project.sheet,
+      row: activity.row,
+      clarification: "",
+    }));
+}
 export function trackExecutionProject(
   project: ExecutionProject,
   year: number,
@@ -141,6 +153,7 @@ export function trackExecutionProject(
     id: project.id,
     name: project.name,
     sheet: project.sheet,
+    activitySources: executionActivitySources(project),
     description: [
       project.purpose,
       project.objective,

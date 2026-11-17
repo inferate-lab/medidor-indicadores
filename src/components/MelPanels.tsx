@@ -1,3 +1,10 @@
+import * as XLSX from "xlsx";
+import {
+  activityOdsMappings,
+  buildAutomaticOdsWorkbook,
+  officialOdsLinks,
+} from "@/lib/automatic-ods";
+import type { TrackingIndicator } from "@/types/project-tracking";
 import { useState } from "react";
 import { ODS_SOURCE } from "@/data/ods-catalog";
 import { latestObservations } from "@/lib/project-tracking";
@@ -110,20 +117,147 @@ export function ProjectSuggestions({
 export function OdsMeasurementPanel({
   project,
   onMeasure,
+  onRegister,
+  onChange,
 }: {
   project: TrackedProject;
   onMeasure: (id: string) => void;
+  onRegister: (indicator: TrackingIndicator) => void;
+  onChange: (project: TrackedProject) => void;
 }) {
   const [period, setPeriod] = useState("");
   const rows = odsMeasurementRows(project, period);
+  const activityMappings = activityOdsMappings(project);
   const declared = declaredGoalsWithoutMeasurement(project);
+  function download() {
+    const bytes = XLSX.write(buildAutomaticOdsWorkbook(project), {
+      type: "array",
+      bookType: "xlsx",
+    });
+    const url = URL.createObjectURL(
+      new Blob([bytes], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "propuesta-vinculacion-ods.xlsx";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">Cómo se mide la contribución del proyecto a los ODS</h3>
       <p className="text-sm">
-        Cada meta se respalda con indicadores locales y sus fuentes. Los avances se evalúan por
-        indicador; no se suman para producir un porcentaje de cumplimiento del ODS.
+        La ONU organiza la Agenda 2030 en ODS, metas específicas (también llamadas aquí «sub-ODS») e
+        indicadores globales. La herramienta propone automáticamente la vinculación según el texto
+        del proyecto y muestra qué indicador local permitiría medir su contribución. Los resultados
+        faltantes no se inventan ni se agregan como un porcentaje de cumplimiento del ODS.
       </p>
+      <p className="text-sm">
+        <a
+          className="text-primary underline"
+          href={ODS_SOURCE.url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Marco global de indicadores ONU
+        </a>
+        {" · "}
+        <a
+          className="text-primary underline"
+          href={ODS_SOURCE.metadataUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Repositorio de metadatos ONU
+        </a>
+      </p>
+      <button className={button} disabled={!rows.length} onClick={download}>
+        Descargar propuesta de vinculación ODS
+      </button>
+      <section className="rounded border p-3">
+        <h4 className="font-semibold">ODS y metas por actividad</h4>
+        <p className="mt-1 text-sm">
+          La asociación usa el texto de cada actividad, su alcance y las aclaraciones que registres.
+          No hereda las metas de otras actividades del proyecto. La meta 6.1 corresponde a agua
+          potable; 6.2, a saneamiento e higiene. Las descripciones siguientes mantienen el texto del
+          catálogo ONU.
+        </p>
+        <div className="mt-3 max-h-[32rem] space-y-3 overflow-y-auto">
+          {activityMappings.map(({ activity, candidates }) => (
+            <article key={activity.id} className="rounded border bg-muted/20 p-3 text-sm">
+              <p className="font-semibold">{activity.description}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {activity.inferred
+                  ? "Fragmento detectado de la descripción: revisar que sea una actividad"
+                  : `Hoja ${activity.sheet}${activity.row ? ` · Fila ${activity.row}` : " · Sin fila de origen"}`}
+                . {activity.scope ? `Alcance: ${activity.scope}` : ""}
+              </p>
+              {candidates.length ? (
+                candidates.map((item) => (
+                  <div key={item.target.code} className="mt-2 rounded border p-2">
+                    <p className="font-semibold">
+                      ODS {item.target.goal}: {item.target.goalTitle}
+                    </p>
+                    <p className="mt-1">
+                      <strong>Meta {item.target.code} (sub-ODS):</strong> {item.target.text}
+                    </p>
+                    <p className="mt-1 text-xs">{item.rationale}</p>
+                    <p className="mt-1 text-xs">
+                      Indicadores globales de referencia: {item.target.indicatorCodes.join(", ")}.{" "}
+                      {item.limit}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="mt-2 text-amber-800">
+                  Sin una meta sustentada en lo leído. Una charla, visita o la mención de mujeres no
+                  basta: precisa el contenido y el cambio que busca esta actividad.
+                </p>
+              )}
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs">
+                  Precisar el contenido de esta actividad para evaluar su vínculo
+                </summary>
+                <label className="mt-2 block text-xs">
+                  Aclaración (no modifica el texto original del Excel)
+                  <textarea
+                    aria-label={`Aclaración de actividad ${activity.id}`}
+                    rows={2}
+                    className={input}
+                    value={activity.clarification}
+                    onChange={(event) =>
+                      onChange({
+                        ...project,
+                        activitySources: activityMappings.map(({ activity: original }) => ({
+                          id: original.id,
+                          description: original.description,
+                          scope: original.scope,
+                          sheet: original.sheet,
+                          row: original.row,
+                          clarification:
+                            original.id === activity.id
+                              ? event.target.value
+                              : original.clarification,
+                        })),
+                      })
+                    }
+                    placeholder="Qué se hace y qué cambio se busca: agua potable, saneamiento, discriminación, liderazgo…"
+                  />
+                </label>
+              </details>
+            </article>
+          ))}
+        </div>
+        {!activityMappings.length && (
+          <p className="mt-2 text-sm">
+            Añade las actividades del proyecto a su descripción para evaluarlas una por una.
+          </p>
+        )}
+      </section>
       <label className="block text-sm">
         Periodo ODS (vacío: último registro de cada indicador)
         <input
@@ -135,30 +269,58 @@ export function OdsMeasurementPanel({
       </label>
       {!rows.length && (
         <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm">
-          Todavía no hay metas ODS vinculadas a indicadores de seguimiento. Incorpora una sugerencia
-          o abre la definición de un indicador, selecciona la meta y justifica su relación. Cargar
-          un Excel no demuestra contribución por sí solo.
+          La descripción disponible todavía no permite proponer una meta específica con fundamento.
+          Añade el objetivo, actividades y cambio esperado del proyecto: la herramienta evaluará
+          automáticamente sus relaciones. No asigna un ODS por el nombre de una empresa ni por una
+          lista de actividades sin contexto.
         </p>
       )}
       {declared.map((goal) => (
         <p key={goal.number} className="rounded border border-amber-200 p-3 text-sm">
           <strong>ODS {goal.number} declarado en el Excel:</strong> {goal.title}. Falta vincular una
-          meta específica con un indicador medible del proyecto.
+          meta específica con un indicador medible del proyecto.{" "}
+          {rows.some((row) => row.target.goal === goal.number)
+            ? "Hay una propuesta automática para revisar más abajo."
+            : "La declaración por sí sola no identifica qué meta se contribuye a medir."}
         </p>
       ))}
-      {rows.map(({ target, indicators }) => (
+      {rows.map(({ target, indicators, evidence, rationale, limit }) => (
         <section key={target.code} className="rounded-lg border p-4">
           <h4 className="font-semibold">
             ODS {target.goal} · Meta {target.code}
           </h4>
-          <p className="mt-2 text-sm">{target.text}</p>
+          <p className="mt-1 text-sm font-medium">{target.goalTitle}</p>
+          <p className="mt-2 text-sm">
+            <strong>Meta específica ONU (sub-ODS):</strong> {target.text}
+          </p>
+          <p className="mt-2 text-sm">{rationale}</p>
+          {evidence.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Fragmentos que activaron la propuesta: {evidence.join(" · ")}
+            </p>
+          )}
+          <p className="mt-2 text-sm">
+            <a
+              className="text-primary underline"
+              href={officialOdsLinks(target.code).goal}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Consultar ODS y metas en Naciones Unidas
+            </a>
+          </p>
           <p className="mt-2 text-xs text-muted-foreground">
             Referencia global: {target.indicatorCodes.join(", ")}. El indicador local no sustituye
-            estos indicadores oficiales. Fuente: {ODS_SOURCE.version}.
+            estos indicadores oficiales. Fuente: {ODS_SOURCE.version}. {limit}
           </p>
           <div className="mt-3 space-y-3">
-            {indicators.map(({ indicator, observation, assessment }) => (
+            {indicators.map(({ indicator, observation, assessment, registered }) => (
               <article key={indicator.id} className="rounded border bg-muted/20 p-3 text-sm">
+                <p className="text-xs font-medium text-primary">
+                  {registered
+                    ? "Indicador en seguimiento"
+                    : "Propuesta automática de indicador local · todavía no medido"}
+                </p>
                 <h5 className="font-semibold">Indicador local: {indicator.name}</h5>
                 <p className="mt-1">Definición: {indicator.formula}.</p>
                 <p className="mt-1">
@@ -202,8 +364,16 @@ export function OdsMeasurementPanel({
                   Evidencia:{" "}
                   {observation?.evidence || observation?.missingReason || "Pendiente de registrar"}.
                 </p>
-                <button className={`${button} mt-2`} onClick={() => onMeasure(indicator.id)}>
-                  Configurar y medir este indicador
+                <p className="mt-2">
+                  Fuente e instrumento propuestos: {indicator.source}. {indicator.instrument}.
+                </p>
+                <button
+                  className={`${button} mt-2`}
+                  onClick={() => (registered ? onMeasure(indicator.id) : onRegister(indicator))}
+                >
+                  {registered
+                    ? "Configurar y medir este indicador"
+                    : "Medir este indicador propuesto"}
                 </button>
               </article>
             ))}

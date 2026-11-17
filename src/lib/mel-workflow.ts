@@ -1,3 +1,4 @@
+import { automaticOdsCandidates } from "@/lib/automatic-ods";
 import { ODS_GOALS, findTarget } from "@/data/ods-catalog";
 import { completeCooperationDraft } from "@/lib/cooperation-draft";
 import { analyzeProject } from "@/lib/analyze-project";
@@ -16,6 +17,7 @@ export function createMelProject(name: string, description: string): TrackedProj
     id: crypto.randomUUID(),
     name: name.trim(),
     description: description.trim(),
+    activitySources: [],
     sheet: "Creación propia",
     indicators: [],
     observations: [],
@@ -70,30 +72,55 @@ export async function suggestForMelProject(project: TrackedProject) {
   });
 }
 export function odsMeasurementRows(project: TrackedProject, period = "") {
-  const codes = [...new Set(project.indicators.flatMap((indicator) => indicator.ods))];
+  const automatic = automaticOdsCandidates(project);
+  const codes = [
+    ...new Set([
+      ...project.indicators.flatMap((indicator) => indicator.ods),
+      ...automatic.map((item) => item.target.code),
+    ]),
+  ];
   return codes.flatMap((code) => {
     const target = findTarget(code);
     if (!target) return [];
+    const proposed = automatic.find((item) => item.target.code === code);
+    const indicators = project.indicators
+      .filter((i) => i.ods.includes(code))
+      .map((indicator) => {
+        const history = latestObservations(project, indicator.id);
+        const observation = period ? history.find((o) => o.period === period) : history.at(-1);
+        return {
+          indicator,
+          observation,
+          assessment: assessMeasurement(indicator, observation),
+          registered: true,
+        };
+      });
+    if (proposed && !indicators.length)
+      indicators.push({
+        indicator: proposed.indicator,
+        observation: undefined,
+        assessment: "Propuesta automática: todavía sin medición",
+        registered: false,
+      });
     return [
       {
         target,
-        indicators: project.indicators
-          .filter((i) => i.ods.includes(code))
-          .map((indicator) => {
-            const history = latestObservations(project, indicator.id);
-            const observation = period ? history.find((o) => o.period === period) : history.at(-1);
-            return {
-              indicator,
-              observation,
-              assessment: assessMeasurement(indicator, observation),
-            };
-          }),
+        indicators,
+        evidence: proposed?.evidence ?? [],
+        rationale: proposed?.rationale ?? "Asociación registrada en la ficha del indicador.",
+        limit:
+          proposed?.limit ??
+          "No equivale al indicador global sin compatibilidad con los metadatos ONU.",
       },
     ];
   });
 }
 export function declaredGoalsWithoutMeasurement(project: TrackedProject) {
-  const linked = new Set(odsMeasurementRows(project).map((r) => r.target.goal));
+  const linked = new Set(
+    odsMeasurementRows(project)
+      .filter((r) => r.indicators.some((i) => i.registered))
+      .map((r) => r.target.goal),
+  );
   return project.declaredGoals
     .filter((g) => !linked.has(g))
     .map((number) => ODS_GOALS.find((g) => g.number === number)!)

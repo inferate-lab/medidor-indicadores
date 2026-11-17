@@ -112,6 +112,19 @@ export const trackedProjectSchema = z.object({
   name: z.string().min(1).max(500),
   sheet: text,
   description: z.string().max(120000),
+  activitySources: z
+    .array(
+      z.object({
+        id,
+        description: text,
+        scope: text,
+        sheet: text,
+        row: z.number().int().positive().nullable(),
+        clarification: text.default(""),
+      }),
+    )
+    .max(2000)
+    .default([]),
   indicators: z.array(trackingIndicatorSchema).max(200),
   observations: z.array(observationSchema).max(24000),
   cooperation: cooperationSchema,

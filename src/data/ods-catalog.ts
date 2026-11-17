@@ -21,9 +21,10 @@ export interface OdsGoal {
 }
 
 export const ODS_SOURCE = {
-  version: "Agenda 2030 — marco global de indicadores (UNSD, revisión 2026)",
+  version: "Agenda 2030 — catálogo local de metas y referencias al marco global ONU",
   url: "https://unstats.un.org/sdgs/indicators/indicators-list/",
   retrievedAt: "2026-09-10",
+  metadataUrl: "https://unstats.un.org/sdgs/metadata/",
 } as const;
 
 export const ODS_GOALS: OdsGoal[] = [

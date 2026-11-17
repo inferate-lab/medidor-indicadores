@@ -137,3 +137,11 @@ Desde ejecución, **Abrir ficha MEL: indicadores, teoría y marco lógico** recu
 Al abrir un proyecto, **Cooperación y réplica** prepara sus 11 apartados con un borrador adaptado a su descripción y actividades. Identifica fragmentos del archivo, propuestas y datos por confirmar. Funciona también con proyectos anteriores que ya tenían teoría del cambio pero no cooperación, y conserva las ediciones humanas y las mediciones.
 
 Los campos completos no significan que la evidencia esté validada: el diagnóstico, costos, acuerdos y resultados no confirmados permanecen en los pendientes. Detalles en `docs/REPORTE_COOPERACION_AUTOGENERADA.md`.
+
+## ODS y metas por actividad
+
+**Medición ODS** muestra cada actividad del plan con su hoja y fila, el objetivo, la meta específica (sub-ODS), su texto y los códigos de indicadores globales de referencia. La vinculación se propone desde la actividad y su alcance, sin trasladar los temas de otras filas ni inventar mediciones.
+
+Una charla sin contenido no recibe un ODS por el nombre de la empresa. Puedes precisar el contenido de esa actividad y la herramienta reevalúa su vínculo. Agua potable se distingue de saneamiento; género requiere precisar discriminación, violencia, liderazgo u otro cambio. Se descarga la matriz y se puede configurar y medir el indicador local propuesto.
+
+El catálogo es local y los enlaces permiten contrastar las referencias ONU; la consulta directa a las páginas ONU estuvo bloqueada en el entorno durante esta entrega. Alcances y validación: `docs/REPORTE_ODS_POR_ACTIVIDAD.md`.

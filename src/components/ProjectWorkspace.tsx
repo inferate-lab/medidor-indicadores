@@ -19,6 +19,7 @@ import {
 } from "@/types/project-tracking";
 import {
   PORTFOLIO_STORAGE_KEY,
+  executionActivitySources,
   cooperationBrief,
   addTrackedProjects,
   adoptIndicator,
@@ -253,6 +254,15 @@ export function ProjectWorkspace({
       if (file.size > 12 * 1024 * 1024) throw new Error("El Excel supera 12 MB.");
       const uploaded = classifyWorkbookUpload(await file.arrayBuffer());
       if (uploaded.kind === "projects") {
+        setPortfolio((current) => ({
+          ...current,
+          projects: current.projects.map((own) => {
+            const source = uploaded.workbook.projects.find((p) => p.id === own.id);
+            return source && !own.activitySources.length
+              ? { ...own, activitySources: executionActivitySources(source) }
+              : own;
+          }),
+        }));
         setProjectUpload({ name: file.name, workbook: uploaded.workbook });
         return;
       }
@@ -791,6 +801,26 @@ function ProjectFollowup({
       ) : tab === "ods" ? (
         <OdsMeasurementPanel
           project={project}
+          onChange={onChange}
+          onRegister={(candidate) => {
+            const existing = project.indicators.find((i) => i.id === candidate.id);
+            onChange({
+              ...project,
+              indicators: existing
+                ? project.indicators.map((i) =>
+                    i.id === candidate.id
+                      ? {
+                          ...i,
+                          ods: [...new Set([...i.ods, ...candidate.ods])].slice(0, 3),
+                          odsRationale: candidate.odsRationale,
+                        }
+                      : i,
+                  )
+                : [...project.indicators, candidate],
+            });
+            setSelected(candidate.id);
+            setTab("medicion");
+          }}
           onMeasure={(id) => {
             setSelected(id);
             setTab("medicion");
