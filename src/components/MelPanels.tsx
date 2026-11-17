@@ -1,3 +1,4 @@
+import { OdsMeterPanel } from "@/components/OdsMeterPanel";
 import * as XLSX from "xlsx";
 import {
   activityOdsMappings,
@@ -184,8 +185,9 @@ export function OdsMeasurementPanel({
       <button className={button} disabled={!rows.length} onClick={download}>
         Descargar propuesta de vinculación ODS
       </button>
-      <section className="rounded border p-3">
-        <h4 className="font-semibold">ODS y metas por actividad</h4>
+      <OdsMeterPanel project={project} />
+      <details className="rounded border p-3">
+        <summary className="cursor-pointer font-semibold">Ver el vínculo actividad por actividad y aclarar actividades</summary>
         <p className="mt-1 text-sm">
           La asociación usa el texto de cada actividad, su alcance y las aclaraciones que registres.
           Cada vínculo muestra la evidencia de esa actividad y el texto de la meta del catálogo ONU.
@@ -251,12 +253,8 @@ export function OdsMeasurementPanel({
                     onChange={(event) =>
                       onChange({
                         ...project,
-                        activitySources: activityMappings.map(({ activity: original }) => ({
-                          id: original.id,
-                          description: original.description,
-                          scope: original.scope,
-                          sheet: original.sheet,
-                          row: original.row,
+                        activitySources: activityMappings.map(({ activity: { inferred: _inferred, ...original } }) => ({
+                          ...original,
                           clarification:
                             original.id === activity.id
                               ? event.target.value
@@ -276,7 +274,7 @@ export function OdsMeasurementPanel({
             Añade las actividades del proyecto a su descripción para evaluarlas una por una.
           </p>
         )}
-      </section>
+      </details>
       <label className="block text-sm">
         Periodo ODS (vacío: último registro de cada indicador)
         <input
