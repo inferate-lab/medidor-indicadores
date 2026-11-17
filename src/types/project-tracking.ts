@@ -121,10 +121,17 @@ export const trackedProjectSchema = z.object({
         sheet: text,
         row: z.number().int().positive().nullable(),
         clarification: text.default(""),
+        // Cifras del plan hasta el mes de corte. Null cuando el Excel no las trae
+        // o la ficha se creó antes de guardarlas: nunca se convierten en cero.
+        planned: z.number().nullable().optional(),
+        executed: z.number().nullable().optional(),
+        participants: z.number().nullable().optional(),
       }),
     )
     .max(2000)
     .default([]),
+  /** Último mes con ejecución registrada en el Excel de origen. */
+  executionCutoff: text.optional(),
   indicators: z.array(trackingIndicatorSchema).max(200),
   observations: z.array(observationSchema).max(24000),
   cooperation: cooperationSchema,

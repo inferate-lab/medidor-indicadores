@@ -1,3 +1,4 @@
+import { analyzeExecution } from "@/lib/execution-analysis";
 import { findTarget } from "@/data/ods-catalog";
 import { MONTHS, type ExecutionProject } from "@/types/execution";
 import type { Indicator } from "@/types/medidor";
@@ -79,16 +80,29 @@ function sumKnown(values: (number | null)[]) {
 }
 /** Un periodo por mes con evidencia de cobertura. No agrega porcentajes ni identifica personas únicas. */
 export function executionActivitySources(project: ExecutionProject) {
+  const results = new Map(analyzeExecution(project).activities.map((result) => [result.activity.id, result]));
   return project.activities
     .filter((activity) => activity.note !== "suprimida")
-    .map((activity) => ({
-      id: activity.id,
-      description: activity.name,
-      scope: activity.scope,
-      sheet: project.sheet,
-      row: activity.row,
-      clarification: "",
-    }));
+    .map((activity) => {
+      const result = results.get(activity.id);
+      return {
+        id: activity.id,
+        description: activity.name,
+        scope: activity.scope,
+        sheet: project.sheet,
+        row: activity.row,
+        clarification: "",
+        planned: result ? result.plannedToDate : null,
+        executed: result ? result.executed : null,
+        participants: result?.participantsActual ?? null,
+      };
+    });
+}
+
+/** Mes de corte del Excel de ejecución, para leer las cifras guardadas en la ficha. */
+export function executionCutoff(project: ExecutionProject): string {
+  const { cutoff, cutoffLabel } = analyzeExecution(project);
+  return cutoff === null ? "" : cutoffLabel;
 }
 /** Actualiza únicamente el contexto documental de la misma ficha, nunca sus mediciones. */
 export function refreshExecutionSources(
@@ -108,6 +122,7 @@ export function refreshExecutionSources(
     declaredGoals: source.declaredGoals,
     description: executionDescription(source),
     activitySources,
+    executionCutoff: executionCutoff(source),
   };
 }
 function executionDescription(project: ExecutionProject) {
@@ -185,6 +200,7 @@ export function trackExecutionProject(
     name: project.name,
     sheet: project.sheet,
     activitySources: executionActivitySources(project),
+    executionCutoff: executionCutoff(project),
     description: executionDescription(project),
     indicators,
     observations,
