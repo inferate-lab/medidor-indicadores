@@ -3,6 +3,7 @@ import { FileSpreadsheet, Loader2 } from "lucide-react";
 
 import { BID_INDICATOR_CATALOG_URL, bidCategoryUrl } from "@/data/bid-catalog";
 import { buildDemoExecutionSheets } from "@/data/demo-execution";
+import { OdsContributionPanel } from "@/components/OdsContributionPanel";
 import { analyzeExecution } from "@/lib/execution-analysis";
 import { parseExecutionGrids, readExecutionWorkbook } from "@/lib/execution-import";
 import { buildInsights, type ProjectInsights } from "@/lib/execution-insights";
@@ -310,6 +311,8 @@ function ProjectView({ project, analysis, onBack, onOpenMel }: { project: Execut
           </Section>
 
           <Section title="ODS a los que aporta" lead={insights.goalMeasure}>
+            <OdsContributionPanel contributions={insights.contributions} />
+            <h4 className="mt-5 text-sm font-semibold">Resumen de metas</h4>
             <div className="grid gap-3 md:grid-cols-3">
               {insights.goals.map((goal) => (
                 <div key={`${goal.goal}-${goal.targetCode ?? "x"}`} className="rounded-lg border p-4 text-sm">
