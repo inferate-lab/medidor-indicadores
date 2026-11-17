@@ -153,6 +153,9 @@ export function trackExecutionProject(
     indicators,
     observations,
     cooperation: emptyCooperation(),
+    cooperationMeta: {},
+    cooperationDraftVersion: 0,
+    cooperationSourceText: "",
     declaredGoals: project.declaredGoals,
     learning: [],
     causalPlan: null,
@@ -349,8 +352,14 @@ export function trackingGaps(project: TrackedProject): TrackingGap[] {
     ],
   ] as const;
   for (const [key, rule, action] of criteria)
-    if (!project.cooperation[key].trim())
-      gaps.push({ rule, evidence: "Sin documentación en la ficha de cooperación.", action });
+    if (!project.cooperation[key].trim() || project.cooperationMeta[key]?.gaps.length)
+      gaps.push({
+        rule,
+        evidence: project.cooperation[key].trim()
+          ? `Borrador orientativo: ${project.cooperationMeta[key]?.gaps.join(" ")}`
+          : "Sin documentación en la ficha de cooperación.",
+        action,
+      });
   return gaps;
 }
 

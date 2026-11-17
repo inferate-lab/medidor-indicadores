@@ -131,3 +131,9 @@ Consulta el diagnóstico en `docs/ANALISIS_MEL_Y_USABILIDAD.md` y los alcances e
 Seleccionar una tarjeta o elegir un proyecto del Excel cambia el contexto completo de su ficha. Usa **Teoría del cambio** para revisar la cadena y los supuestos; **Marco lógico** reúne esa cadena con los indicadores y mediciones del mismo proyecto y permite descargarla. Un proyecto nuevo también recibe su propio borrador cuando su descripción es suficiente. Los indicadores propuestos se incorporan al seguimiento solo cuando los eliges.
 
 Desde ejecución, **Abrir ficha MEL: indicadores, teoría y marco lógico** recupera la ficha existente o lleva el proyecto al flujo de creación de seguimiento. El formulario **Crear otro proyecto desde documentos** es independiente y sus marcos institucionales son opcionales. Más información: `docs/REPORTE_FICHA_PROYECTO_INTEGRADA.md`.
+
+## Cooperación y réplica automáticas
+
+Al abrir un proyecto, **Cooperación y réplica** prepara sus 11 apartados con un borrador adaptado a su descripción y actividades. Identifica fragmentos del archivo, propuestas y datos por confirmar. Funciona también con proyectos anteriores que ya tenían teoría del cambio pero no cooperación, y conserva las ediciones humanas y las mediciones.
+
+Los campos completos no significan que la evidencia esté validada: el diagnóstico, costos, acuerdos y resultados no confirmados permanecen en los pendientes. Detalles en `docs/REPORTE_COOPERACION_AUTOGENERADA.md`.

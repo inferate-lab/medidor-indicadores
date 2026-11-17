@@ -100,6 +100,13 @@ export const causalPlanSchema = z.object({
   impactAssumption: text,
 });
 export type CausalPlan = z.infer<typeof causalPlanSchema>;
+export const cooperationFieldMetaSchema = z.object({
+  origin: z.enum(["documento", "propuesta", "manual"]),
+  evidence: z.array(z.string().max(1500)).max(10),
+  gaps: z.array(text).max(20),
+  generatedText: text,
+});
+export type CooperationFieldMeta = z.infer<typeof cooperationFieldMetaSchema>;
 export const trackedProjectSchema = z.object({
   id,
   name: z.string().min(1).max(500),
@@ -108,6 +115,9 @@ export const trackedProjectSchema = z.object({
   indicators: z.array(trackingIndicatorSchema).max(200),
   observations: z.array(observationSchema).max(24000),
   cooperation: cooperationSchema,
+  cooperationMeta: z.record(cooperationFieldMetaSchema).default({}),
+  cooperationDraftVersion: z.number().int().nonnegative().default(0),
+  cooperationSourceText: z.string().max(120000).default(""),
   declaredGoals: z.array(z.number().int().min(1).max(17)).default([]),
   learning: z.array(learningEntrySchema).max(2000).default([]),
   causalPlan: causalPlanSchema.nullable().default(null),

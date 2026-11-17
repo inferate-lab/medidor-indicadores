@@ -1,4 +1,5 @@
 import { ODS_GOALS, findTarget } from "@/data/ods-catalog";
+import { completeCooperationDraft } from "@/lib/cooperation-draft";
 import { analyzeProject } from "@/lib/analyze-project";
 import { adoptIndicator, assessMeasurement, latestObservations } from "@/lib/project-tracking";
 import {
@@ -19,6 +20,9 @@ export function createMelProject(name: string, description: string): TrackedProj
     indicators: [],
     observations: [],
     cooperation: emptyCooperation(),
+    cooperationMeta: {},
+    cooperationDraftVersion: 0,
+    cooperationSourceText: "",
     declaredGoals: [],
     learning: [],
     causalPlan: null,
@@ -30,7 +34,7 @@ export function trackDesignedProject(
   analysis: SessionAnalysis,
 ): TrackedProject {
   const project = createMelProject(input.name, input.text);
-  return {
+  return completeCooperationDraft({
     ...project,
     causalPlan: designPlanFromAnalysis(project, analysis),
     indicatorSuggestions: analysis.indicators.map(adoptIndicator),
@@ -41,7 +45,7 @@ export function trackDesignedProject(
       territory: input.territory,
       causalHypothesis: analysis.causal.preliminaryTheoryOfChange,
     },
-  };
+  });
 }
 export async function suggestForMelProject(project: TrackedProject) {
   return analyzeProject({
@@ -49,8 +53,16 @@ export async function suggestForMelProject(project: TrackedProject) {
       name: project.name,
       text: project.description,
       sector: "",
-      territory: project.cooperation.territory,
-      targetPopulation: project.cooperation.population,
+      territory:
+        project.cooperationMeta["territory"] &&
+        project.cooperationMeta["territory"].origin !== "manual"
+          ? ""
+          : project.cooperation.territory,
+      targetPopulation:
+        project.cooperationMeta["population"] &&
+        project.cooperationMeta["population"].origin !== "manual"
+          ? ""
+          : project.cooperation.population,
       budget: "",
       duration: "",
       sourceFileNames: [],
@@ -132,11 +144,11 @@ export function designPlanFromAnalysis(project: TrackedProject, analysis: Sessio
 }
 export async function prepareProjectDesign(project: TrackedProject): Promise<TrackedProject> {
   const analysis = await suggestForMelProject(project);
-  return {
+  return completeCooperationDraft({
     ...project,
     causalPlan: project.causalPlan ?? designPlanFromAnalysis(project, analysis),
     indicatorSuggestions: analysis.indicators.map(adoptIndicator),
-  };
+  });
 }
 export function incorporateSuggestion(project: TrackedProject, id: string): TrackedProject {
   const candidate = project.indicatorSuggestions.find((i) => i.id === id);

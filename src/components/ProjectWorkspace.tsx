@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import { ExcelIndicatorDesigner } from "@/components/ExcelIndicatorDesigner";
 import { TheoryPanel, LogframePanel } from "@/components/ProjectDesignPanels";
+import { completeCooperationDraft, cooperationDraftNeeded } from "@/lib/cooperation-draft";
 import { prepareProjectDesign } from "@/lib/mel-workflow";
 import { OdsMeasurementPanel, LearningPanel, ProjectSuggestions } from "@/components/MelPanels";
 import { createMelProject, trackDesignedProject } from "@/lib/mel-workflow";
@@ -539,13 +540,13 @@ export function ProjectWorkspace({
               ...current,
               projects: current.projects.map((own) =>
                 own.id === prepared.id
-                  ? {
+                  ? completeCooperationDraft({
                       ...own,
                       causalPlan: own.causalPlan ?? prepared.causalPlan,
                       indicatorSuggestions: own.indicatorSuggestions.length
                         ? own.indicatorSuggestions
                         : prepared.indicatorSuggestions,
-                    }
+                    })
                   : own,
               ),
             }))
@@ -614,11 +615,15 @@ function ProjectFollowup({
   const [preparing, setPreparing] = useState(false);
   const [designError, setDesignError] = useState("");
   useEffect(() => {
-    if (project.causalPlan || project.description.trim().length < 80) return;
+    const needsPlan = !project.causalPlan && project.description.trim().length >= 80;
+    if (!needsPlan && !cooperationDraftNeeded(project)) return;
     let active = true;
     setPreparing(true);
     setDesignError("");
-    prepareProjectDesign(project)
+    const preparation = needsPlan
+      ? prepareProjectDesign(project)
+      : Promise.resolve(completeCooperationDraft(project));
+    preparation
       .then((prepared) => {
         if (active) onDesignReady(prepared);
       })
@@ -631,7 +636,7 @@ function ProjectFollowup({
     return () => {
       active = false;
     };
-  }, [project.id, project.description.trim().length >= 80]);
+  }, [project.id, project.description]);
   const gaps = trackingGaps(project);
   return (
     <section id="seguimiento-proyecto" className={`${panel} space-y-4`}>
@@ -796,24 +801,53 @@ function ProjectFollowup({
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            Documenta el proyecto para cooperación internacional. Esta revisión interna identifica
-            vacíos; no evalúa elegibilidad ni sustituye los requisitos de una convocatoria.
+            Borrador preparado automáticamente para {project.name} a partir de su descripción,
+            actividades y ficha MEL. Revisa y ajusta la orientación: los fragmentos del archivo y
+            las propuestas están identificados. Los datos que faltan confirmar siguen pendientes;
+            completar este borrador no demuestra impacto ni elegibilidad ante un donante.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             {COOPERATION_FIELDS.map(([key, label, help]) => (
               <Field key={key} label={label}>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {project.cooperationMeta[key]?.origin === "manual"
+                    ? "Editado por ti"
+                    : project.cooperationMeta[key]?.origin === "documento"
+                      ? "Basado en fragmentos del archivo y orientación de la herramienta"
+                      : "Propuesta de la herramienta para revisar"}
+                </span>
                 <textarea
+                  aria-label={label}
                   className={input}
-                  rows={3}
+                  rows={6}
                   value={project.cooperation[key]}
                   placeholder={help}
                   onChange={(event) =>
                     onChange({
                       ...project,
                       cooperation: { ...project.cooperation, [key]: event.target.value },
+                      cooperationMeta: {
+                        ...project.cooperationMeta,
+                        [key]: {
+                          origin: "manual",
+                          evidence: [],
+                          gaps: [],
+                          generatedText: "",
+                        },
+                      },
                     })
                   }
                 />
+                {project.cooperationMeta[key]?.gaps.map((gap, index) => (
+                  <span key={index} className="mt-1 block text-xs text-amber-800">
+                    Por confirmar: {gap}
+                  </span>
+                ))}
+                {Boolean(project.cooperationMeta[key]?.evidence.length) && (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    Fragmentos usados: {project.cooperationMeta[key]?.evidence.join(" · ")}
+                  </span>
+                )}
               </Field>
             ))}
           </div>
