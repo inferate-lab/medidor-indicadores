@@ -1,3 +1,4 @@
+import { OdsContributionPanel } from "@/components/OdsContributionPanel";
 import { useEffect, useState } from "react";
 import {
   buildSuggestionWorkbook,
@@ -225,6 +226,15 @@ export function ExcelIndicatorDesigner({
                 {warning}
               </p>
             ))}
+          </section>
+          <section className={panel}>
+            <h2 className="text-lg font-semibold">Aporte a las metas ODS</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Cada meta se calcula con las actividades del plan que trabajan ese tema, y se ordena por lo que el proyecto ejecutó.
+            </p>
+            <div className="mt-4">
+              <OdsContributionPanel contributions={result.insights.contributions} />
+            </div>
           </section>
           <section className={panel}>
             <h2 className="text-lg font-semibold">

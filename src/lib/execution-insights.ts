@@ -12,6 +12,7 @@ import { bidReferencesForSectors, type BidCountryCategory } from "@/data/bid-cat
 import { detectConcepts, type ConceptReference } from "@/data/concept-catalog";
 import { ODS_GOALS, findTarget } from "@/data/ods-catalog";
 import { THEME_RULES } from "@/data/theme-ods-map";
+import { odsContributions, type OdsContribution } from "@/lib/ods-contribution";
 import { analyzeProject } from "@/lib/analyze-project";
 import type { ExecutionAnalysis, ExecutionProject } from "@/types/execution";
 import type { BidReference, CausalLevel, CausalLinkKey, DetectedSector } from "@/types/medidor";
@@ -62,6 +63,8 @@ export interface ProjectInsights {
   /** Qué del aporte a los ODS se puede contar hoy con el Excel. */
   goalMeasure: string;
   concepts: ConceptReference[];
+  /** Aporte medido a cada meta ODS, desde las actividades del plan. */
+  contributions: OdsContribution[];
   /** Referencias del catálogo del BID: marco de impacto y categorías de indicadores de país. */
   bid: { framework: BidReference[]; countryCategories: BidCountryCategory[] };
   theory: {
@@ -170,7 +173,21 @@ export async function buildInsights(
   const outcomeCandidates = base.indicators.filter(
     (indicator) => indicator.level === "resultado" || indicator.level === "impacto",
   );
-  for (const indicator of outcomeCandidates.slice(0, 4)) {
+  // Primero, el indicador de resultado de cada meta ODS donde el proyecto concentra su ejecución.
+  const contributions = odsContributions(project, analysis);
+  const leading = contributions.filter((item) => item.strength !== "baja").slice(0, 3);
+  for (const item of leading) {
+    const { outcome, globalIndicator } = item.pathway;
+    missing.push({
+      name: outcome.name,
+      level: outcome.level,
+      kind: "resultado",
+      why: `Muestra si las actividades de ${item.pathway.theme.toLowerCase()} produjeron el cambio que busca la meta ODS ${item.pathway.targetCode}. Hoy el Excel solo cuenta lo que se hizo.`,
+      howToMeasure: `${outcome.instrument}. ${outcome.frequency}. Se acerca al indicador global ${globalIndicator.code}, que mide a escala de país.`,
+    });
+  }
+  const leadingNames = new Set(missing.map((item) => item.name));
+  for (const indicator of outcomeCandidates.filter((item) => !leadingNames.has(item.name)).slice(0, Math.max(1, 4 - leading.length))) {
     missing.push({
       name: indicator.name,
       level: indicator.level,
@@ -206,6 +223,20 @@ export async function buildInsights(
   const declared = new Set(project.declaredGoals);
   const goals: GoalContribution[] = [];
   const usedGoals = new Set<number>();
+  // Las metas respaldadas por actividades ejecutadas van primero, ordenadas por lo ejecutado.
+  for (const item of contributions) {
+    if (usedGoals.has(item.goal) || goals.length >= 3) continue;
+    if (item.strength === "baja" && !item.declared) continue;
+    usedGoals.add(item.goal);
+    goals.push({
+      goal: item.goal,
+      goalTitle: item.goalTitle,
+      targetCode: item.pathway.targetCode,
+      targetText: item.targetText,
+      source: item.declared ? "declarado_y_sugerido" : "sugerido",
+      rationale: `${item.summary} Debe confirmarlo el equipo.`,
+    });
+  }
   const ordered = [
     ...scored.filter((item) => declared.has(findTarget(item.rule.targetCode)?.goal ?? -1)),
     ...scored.filter((item) => !declared.has(findTarget(item.rule.targetCode)?.goal ?? -1)),
@@ -316,6 +347,7 @@ export async function buildInsights(
     goals,
     goalMeasure,
     concepts: detectConcepts(text),
+    contributions,
     bid: bidReferencesForSectors(base.detectedSectors.map((sector) => sector.key)),
     theory: { activities, outputs, outcomes, impact, assumptions },
     logframe,
