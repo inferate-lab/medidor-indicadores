@@ -28,6 +28,10 @@ export const trackingIndicatorSchema = z.object({
   upper: number,
   ods: z.array(z.string().max(10)).max(3),
   odsRationale: text.default(""),
+  recommendationRationale: text.default(""),
+  projectEvidence: z.array(text).max(20).default([]),
+  dataNeeded: z.array(text).max(30).default([]),
+  measurementLimit: text.default(""),
   origin: z.enum(["excel", "sugerido", "propio"]),
 });
 export const observationSchema = z

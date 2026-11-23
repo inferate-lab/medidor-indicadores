@@ -53,6 +53,10 @@ export function blankIndicator(id: string = crypto.randomUUID()): TrackingIndica
     upper: null,
     ods: [],
     odsRationale: "",
+    recommendationRationale: "",
+    projectEvidence: [],
+    dataNeeded: [],
+    measurementLimit: "",
     origin: "propio",
   };
 }
@@ -60,6 +64,11 @@ export function adoptIndicator(indicator: Indicator): TrackingIndicator {
   return {
     ...blankIndicator(`sugerido-${indicator.id}`),
     name: indicator.name,
+    orientation: indicator.orientation,
+    recommendationRationale: indicator.recommendationRationale,
+    projectEvidence: indicator.projectEvidence,
+    dataNeeded: indicator.pendingIssues,
+    measurementLimit: indicator.attributionLimits,
     code: indicator.institutionalCode,
     level: indicator.level,
     unit: indicator.unit,

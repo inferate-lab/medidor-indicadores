@@ -1,3 +1,4 @@
+import { InterventionProfile } from "@/components/InterventionProfile";
 import { useEffect, useState, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import { ExcelIndicatorDesigner } from "@/components/ExcelIndicatorDesigner";
@@ -670,6 +671,7 @@ function ProjectFollowup({
         Toda esta ficha corresponde a <strong>{project.name}</strong>: indicadores, mediciones, ODS,
         teoría del cambio y marco lógico. Cambiar de proyecto cambia el contexto completo.
       </p>
+      <InterventionProfile text={project.description} />
       {preparing && (
         <p role="status" className="text-sm">
           Preparando el borrador y las sugerencias de este proyecto…

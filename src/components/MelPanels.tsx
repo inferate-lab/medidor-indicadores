@@ -87,6 +87,36 @@ export function ProjectSuggestions({
             <article key={indicator.id} className="rounded border p-3 text-sm">
               <h4 className="font-semibold">{indicator.name}</h4>
               <p className="mt-1">{indicator.formula}</p>
+              {indicator.recommendationRationale && (
+                <p className="mt-2">{indicator.recommendationRationale}</p>
+              )}
+              {indicator.projectEvidence.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer">Texto que sustenta la sugerencia</summary>
+                  {indicator.projectEvidence.map((evidence, index) => (
+                    <p key={index} className="mt-1 text-xs">
+                      {evidence}
+                    </p>
+                  ))}
+                </details>
+              )}
+              <p className="mt-1 text-xs">Instrumento propuesto: {indicator.instrument}</p>
+              {indicator.dataNeeded.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer">Datos que hacen falta para medir</summary>
+                  <ul className="mt-1 list-disc pl-5">
+                    {indicator.dataNeeded.map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {indicator.measurementLimit && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Límite: {indicator.measurementLimit}
+                </p>
+              )}
+
               <p className="mt-1">
                 Fuente propuesta: {indicator.source}. {indicator.frequency}.
               </p>
@@ -187,7 +217,9 @@ export function OdsMeasurementPanel({
       </button>
       <OdsMeterPanel project={project} />
       <details className="rounded border p-3">
-        <summary className="cursor-pointer font-semibold">Ver el vínculo actividad por actividad y aclarar actividades</summary>
+        <summary className="cursor-pointer font-semibold">
+          Ver el vínculo actividad por actividad y aclarar actividades
+        </summary>
         <p className="mt-1 text-sm">
           La asociación usa el texto de cada actividad, su alcance y las aclaraciones que registres.
           Cada vínculo muestra la evidencia de esa actividad y el texto de la meta del catálogo ONU.
@@ -253,13 +285,15 @@ export function OdsMeasurementPanel({
                     onChange={(event) =>
                       onChange({
                         ...project,
-                        activitySources: activityMappings.map(({ activity: { inferred: _inferred, ...original } }) => ({
-                          ...original,
-                          clarification:
-                            original.id === activity.id
-                              ? event.target.value
-                              : original.clarification,
-                        })),
+                        activitySources: activityMappings.map(
+                          ({ activity: { inferred: _inferred, ...original } }) => ({
+                            ...original,
+                            clarification:
+                              original.id === activity.id
+                                ? event.target.value
+                                : original.clarification,
+                          }),
+                        ),
                       })
                     }
                     placeholder="Qué se hace y qué cambio se busca: agua potable, saneamiento, discriminación, liderazgo…"

@@ -1,3 +1,4 @@
+import { designInterventionIndicators } from "@/lib/intervention-measurement";
 import { targetEvidenceSupported } from "@/lib/ods-evidence";
 import {
   INDICATOR_LIBRARY,
@@ -727,7 +728,31 @@ export async function analyzeProject({
   const causal = causalModel(data, allSentences, detectedSectors);
   const templates = selectTemplates(`${data.sector} ${data.text}`, detectedSectors);
   const generic = templates.map((template) => makeIndicator(template, data, allSentences, settings.frameworks));
-  const indicators = alignWithOdsPathways(generic, data, allSentences, settings.frameworks);
+  const aligned = alignWithOdsPathways(generic, data, allSentences, settings.frameworks);
+  const adaptive = designInterventionIndicators(data).map((indicator) => ({
+    ...indicator, frameworkIds: suggestFrameworkIds(indicator.level, settings.frameworks),
+  }));
+  const previousLearning = aligned.find((i) => i.id === "learning_gain");
+  const learning = adaptive.find((i) => i.id === "adaptive_learning_change");
+  if (learning && previousLearning) {
+    learning.id = previousLearning.id;
+    learning.name = previousLearning.name;
+    learning.bidReferences = previousLearning.bidReferences;
+    learning.colombiaReferences = previousLearning.colombiaReferences;
+    learning.odsAlignments = previousLearning.odsAlignments;
+  }
+  const ordered = [
+    ...aligned.filter((i) => i.id === "g_deliverables"),
+    ...adaptive,
+    ...aligned.filter((i) => i.level === "impacto"),
+    ...aligned,
+  ];
+  const seen = new Set<string>();
+  const indicators = ordered.filter((indicator) => {
+    if (seen.has(indicator.id)) return false;
+    seen.add(indicator.id);
+    return true;
+  }).slice(0, MAX_INDICATORS);
   const logicalFrameworkReview = reviewLogicalFramework(data, causal, indicators, settings.rules);
   return {
     origin: "motor_local",

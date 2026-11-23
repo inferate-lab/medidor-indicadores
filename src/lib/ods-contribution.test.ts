@@ -100,6 +100,7 @@ describe("sugerencias de indicadores conectadas a los ODS", () => {
     expect(result.indicators.length).toBeLessThanOrEqual(12);
     const management = result.indicators.filter((indicator) => indicator.level === "gestion" && !indicator.id.startsWith("gender_"));
     expect(management.every((indicator) => indicator.odsAlignments.length === 0)).toBe(true);
-    expect(result.indicators.slice(0, 3).every((indicator) => indicator.id.startsWith("ods_"))).toBe(true);
+    expect(result.indicators.some((indicator) => indicator.id.startsWith("ods_"))).toBe(true);
+    expect(result.indicators.some((indicator) => indicator.id === "adaptive_environment_practice")).toBe(true);
   });
 });
